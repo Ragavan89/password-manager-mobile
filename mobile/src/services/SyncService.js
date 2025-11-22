@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
-import { addToSheet, updateInSheet, deleteFromSheet, fetchFromSheet } from './SheetsApi';
+import { addToSheet, updateInSheet, deleteFromSheet, fetchFromSheet, isApiConfigured } from './SheetsApi';
 import { getPasswords, upsertPassword, deletePassword, clearAllPasswords } from './Database';
 
 const SYNC_QUEUE_KEY = 'SYNC_QUEUE';
@@ -8,6 +8,8 @@ const LAST_SYNC_KEY = 'LAST_SYNC_TIME';
 
 let syncInProgress = false;
 let networkListenerUnsubscribe = null;
+
+
 
 // Queue structure: { type: 'add'|'edit'|'delete', data: {...}, timestamp: number }
 
@@ -74,12 +76,14 @@ export const getSyncStatus = async () => {
     const queue = await getQueue();
     const netState = await NetInfo.fetch();
     const lastSync = await AsyncStorage.getItem(LAST_SYNC_KEY);
+    const configured = await isApiConfigured();
 
     return {
         isOnline: netState.isConnected && netState.isInternetReachable,
         pendingOperations: queue.length,
         lastSyncTime: lastSync ? parseInt(lastSync) : null,
-        isSyncing: syncInProgress
+        isSyncing: syncInProgress,
+        isConfigured: configured
     };
 };
 
@@ -161,9 +165,14 @@ const processQueue = async () => {
                     await deleteFromSheet(operation.data.id);
                     break;
             }
-            console.log(`Synced ${operation.type} operation for ${operation.data.siteName || operation.data.id}`);
+            console.log(`✅ Synced ${operation.type} operation for ${operation.data.siteName || operation.data.id}`);
         } catch (error) {
-            console.error(`Failed to sync ${operation.type} operation:`, error);
+            // Silently handle errors when API URL is not configured
+            if (error.message && error.message.includes('API URL')) {
+                console.log(`⏸️  Sync paused: Google Sheets not configured yet`);
+            } else {
+                console.error(`❌ Failed to sync ${operation.type} operation:`, error.message);
+            }
             failedOperations.push(operation);
         }
     }
@@ -171,10 +180,15 @@ const processQueue = async () => {
     // Update queue with only failed operations
     if (failedOperations.length > 0) {
         await AsyncStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(failedOperations));
-        console.log(`${failedOperations.length} operations failed, will retry later`);
+        // Only log if it's not just a missing API URL
+        const hasRealErrors = failedOperations.some(op => {
+            // Check if error is something other than missing API URL
+            return true; // For now, just keep them queued
+        });
+        console.log(`📥 ${failedOperations.length} operation(s) queued for sync`);
     } else {
         await clearQueue();
-        console.log('All operations synced successfully');
+        console.log('✅ All operations synced successfully');
     }
 };
 

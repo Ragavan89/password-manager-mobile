@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Button, ActivityIndicator, RefreshControl, SafeAreaView, Alert } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Button, ActivityIndicator, RefreshControl, SafeAreaView, Alert, TextInput } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import { getPasswords } from '../services/Database';
@@ -8,9 +8,12 @@ import { decryptPassword } from '../services/Encryption';
 
 export default function HomeScreen({ navigation }) {
     const [passwords, setPasswords] = useState([]);
+    const [filteredPasswords, setFilteredPasswords] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState({});
     const [syncStatus, setSyncStatus] = useState({ isOnline: true, pendingOperations: 0, isSyncing: false });
+
 
     // Initialize sync service on mount
     useEffect(() => {
@@ -70,18 +73,29 @@ export default function HomeScreen({ navigation }) {
         setSyncStatus(status);
     };
 
+
     // Add Settings and Logout Buttons to Header
     useEffect(() => {
         navigation.setOptions({
             headerRight: () => (
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: 5 }}>
+                    {/* Add New Button - Icon Only */}
                     <TouchableOpacity
                         onPress={() => navigation.navigate('AddPassword')}
-                        style={{ marginRight: 15, flexDirection: 'row', alignItems: 'center', backgroundColor: '#d3f9d8', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                        style={{
+                            marginHorizontal: 6,
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: '#d3f9d8',
+                            justifyContent: 'center',
+                            alignItems: 'center'
+                        }}
                     >
-                        <Text style={{ fontSize: 18, marginRight: 4 }}>➕</Text>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#2b8a3e' }}>Add New</Text>
+                        <Text style={{ fontSize: 20 }}>➕</Text>
                     </TouchableOpacity>
+
+                    {/* Cloud Sync Button - Icon Only */}
                     <TouchableOpacity
                         onPress={async () => {
                             // Start sync
@@ -114,20 +128,49 @@ export default function HomeScreen({ navigation }) {
                                 }
                             }, 500); // Check every 500ms
                         }}
-                        style={{ marginRight: 15, flexDirection: 'row', alignItems: 'center', backgroundColor: '#e7f5ff', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                        style={{
+                            marginHorizontal: 6,
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: '#e7f5ff',
+                            justifyContent: 'center',
+                            alignItems: 'center'
+                        }}
                     >
-                        <Text style={{ fontSize: 18, marginRight: 4 }}>🔄</Text>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#1971c2' }}>Cloud Sync</Text>
+                        <Text style={{ fontSize: 20 }}>🔄</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={{ marginRight: 15 }}>
-                        <Text style={{ fontSize: 24 }}>⚙️</Text>
+
+                    {/* Settings Button - Icon Only */}
+                    <TouchableOpacity
+                        onPress={() => navigation.navigate('Settings')}
+                        style={{
+                            marginHorizontal: 6,
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: '#fff3bf',
+                            justifyContent: 'center',
+                            alignItems: 'center'
+                        }}
+                    >
+                        <Text style={{ fontSize: 20 }}>⚙️</Text>
                     </TouchableOpacity>
+
+                    {/* Logout Button - Icon Only */}
                     <TouchableOpacity
                         onPress={() => navigation.replace('Login')}
-                        style={{ marginRight: 15, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f1f3f5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                        style={{
+                            marginHorizontal: 6,
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: '#ffe3e3',
+                            justifyContent: 'center',
+                            alignItems: 'center'
+                        }}
                     >
-                        <Text style={{ fontSize: 18, marginRight: 4 }}>🔓</Text>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#495057' }}>Logout</Text>
+                        <Text style={{ fontSize: 20 }}>🔓</Text>
                     </TouchableOpacity>
                 </View>
             ),
@@ -173,6 +216,25 @@ export default function HomeScreen({ navigation }) {
     const copyToClipboard = async (text, label) => {
         await Clipboard.setStringAsync(text);
         Alert.alert('Copied', `${label} copied to clipboard!`);
+    };
+
+    // Filter passwords based on search query
+    useEffect(() => {
+        if (!searchQuery.trim()) {
+            setFilteredPasswords(passwords);
+        } else {
+            const query = searchQuery.toLowerCase();
+            const filtered = passwords.filter(item =>
+                item.siteName.toLowerCase().includes(query) ||
+                item.username.toLowerCase().includes(query) ||
+                (item.comments && item.comments.toLowerCase().includes(query))
+            );
+            setFilteredPasswords(filtered);
+        }
+    }, [searchQuery, passwords]);
+
+    const clearSearch = () => {
+        setSearchQuery('');
     };
 
     const formatDate = (isoString) => {
@@ -286,7 +348,16 @@ export default function HomeScreen({ navigation }) {
                     </Text>
                 </View>
             )}
-            {syncStatus.isOnline && syncStatus.isSyncing && (
+            {/* Sync Status Banners */}
+            {!syncStatus.isConfigured && (
+                <View style={[styles.lastSyncBanner, { backgroundColor: '#fff3bf' }]}>
+                    <Text style={[styles.lastSyncText, { color: '#f08c00' }]}>
+                        ⚠️ Local Only Mode (Cloud Sync Not Configured)
+                    </Text>
+                </View>
+            )}
+
+            {syncStatus.isConfigured && syncStatus.isOnline && syncStatus.isSyncing && (
                 <View style={styles.syncingBanner}>
                     <ActivityIndicator size="small" color="#007AFF" />
                     <Text style={styles.syncingText}>  Syncing...</Text>
@@ -294,13 +365,38 @@ export default function HomeScreen({ navigation }) {
             )}
 
             {/* Last Synced Indicator */}
-            {syncStatus.isOnline && !syncStatus.isSyncing && syncStatus.lastSyncTime && (
+            {syncStatus.isConfigured && syncStatus.isOnline && !syncStatus.isSyncing && syncStatus.lastSyncTime && (
                 <View style={styles.lastSyncBanner}>
                     <Text style={styles.lastSyncText}>
                         Last synced: {formatDate(new Date(syncStatus.lastSyncTime).toISOString())}
                     </Text>
                 </View>
             )}
+
+            {/* Search Bar */}
+            <View style={styles.searchContainer}>
+                <View style={styles.searchInputContainer}>
+                    <Text style={styles.searchIcon}>🔍</Text>
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search by site, username, or comments..."
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                    />
+                    {searchQuery.length > 0 && (
+                        <TouchableOpacity onPress={clearSearch} style={styles.clearButton}>
+                            <Text style={styles.clearButtonText}>✕</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+                {searchQuery.length > 0 && (
+                    <Text style={styles.resultCount}>
+                        {filteredPasswords.length} result{filteredPasswords.length !== 1 ? 's' : ''} found
+                    </Text>
+                )}
+            </View>
 
             {loading ? (
                 <View style={styles.center}>
@@ -309,7 +405,7 @@ export default function HomeScreen({ navigation }) {
                 </View>
             ) : (
                 <FlatList
-                    data={passwords}
+                    data={filteredPasswords}
                     keyExtractor={(item) => item.id ? item.id.toString() : Math.random().toString()}
                     renderItem={renderItem}
                     contentContainerStyle={styles.listContent}
@@ -318,8 +414,20 @@ export default function HomeScreen({ navigation }) {
                     }
                     ListEmptyComponent={
                         <View style={styles.emptyState}>
-                            <Text style={styles.emptyText}>No passwords found.</Text>
-                            <Text style={styles.emptySubText}>Tap "Add New" in the header to add one.</Text>
+                            {searchQuery.length > 0 ? (
+                                <>
+                                    <Text style={styles.emptyText}>No passwords found</Text>
+                                    <Text style={styles.emptySubText}>Try a different search term</Text>
+                                    <TouchableOpacity onPress={clearSearch} style={styles.clearSearchButton}>
+                                        <Text style={styles.clearSearchButtonText}>Clear Search</Text>
+                                    </TouchableOpacity>
+                                </>
+                            ) : (
+                                <>
+                                    <Text style={styles.emptyText}>No passwords found.</Text>
+                                    <Text style={styles.emptySubText}>Tap "Add New" in the header to add one.</Text>
+                                </>
+                            )}
                         </View>
                     }
                 />
@@ -545,5 +653,61 @@ const styles = StyleSheet.create({
         fontSize: 11,
         fontWeight: '500',
         textAlign: 'center',
+    },
+    searchContainer: {
+        backgroundColor: '#fff',
+        paddingHorizontal: 20,
+        paddingTop: 15,
+        paddingBottom: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e9ecef',
+    },
+    searchInputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f8f9fa',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#dee2e6',
+        paddingHorizontal: 12,
+        height: 48,
+    },
+    searchIcon: {
+        fontSize: 18,
+        marginRight: 8,
+        color: '#6c757d',
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 15,
+        color: '#212529',
+        paddingVertical: 0,
+    },
+    clearButton: {
+        padding: 4,
+        marginLeft: 8,
+    },
+    clearButtonText: {
+        fontSize: 20,
+        color: '#6c757d',
+        fontWeight: 'bold',
+    },
+    resultCount: {
+        fontSize: 12,
+        color: '#6c757d',
+        marginTop: 8,
+        fontStyle: 'italic',
+    },
+    clearSearchButton: {
+        marginTop: 16,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        backgroundColor: '#007AFF',
+        borderRadius: 8,
+    },
+    clearSearchButtonText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
     }
 });

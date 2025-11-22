@@ -1,3 +1,4 @@
+import 'react-native-get-random-values'; // MUST be first import for crypto to work
 import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';

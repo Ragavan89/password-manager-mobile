@@ -11,6 +11,11 @@ const getApiUrl = async () => {
     return await SecureStore.getItemAsync(STORE_KEY);
 };
 
+export const isApiConfigured = async () => {
+    const url = await getApiUrl();
+    return !!url;
+};
+
 export const fetchFromSheet = async () => {
     const url = await getApiUrl();
     if (!url) return [];

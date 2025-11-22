@@ -39,15 +39,27 @@ export default function AddPasswordScreen({ navigation, route }) {
 
             if (isEditMode) {
                 await updatePasswordOffline(itemToEdit.id, siteName, username, encrypted, comments);
-                Alert.alert('Success', 'Password updated and queued for sync');
+                Alert.alert(
+                    '✅ Password Updated!',
+                    'Your password has been saved locally and will sync to Google Sheets when you\'re online.',
+                    [{ text: 'OK', style: 'default' }]
+                );
             } else {
                 await addPasswordOffline(siteName, username, encrypted, comments);
-                Alert.alert('Success', 'Password saved and queued for sync');
+                Alert.alert(
+                    '✅ Password Saved!',
+                    'Your password is securely saved on this device and will automatically sync to Google Sheets when you\'re online.',
+                    [{ text: 'OK', style: 'default' }]
+                );
             }
 
             navigation.goBack();
         } catch (error) {
-            Alert.alert('Error', 'Failed to save password');
+            Alert.alert(
+                '❌ Save Failed',
+                'Could not save password. Please try again.\n\nError: ' + error.message,
+                [{ text: 'OK', style: 'cancel' }]
+            );
             console.error(error);
         } finally {
             setLoading(false);
@@ -76,6 +88,7 @@ export default function AddPasswordScreen({ navigation, route }) {
                                 returnKeyType="next"
                                 onSubmitEditing={() => usernameRef.current.focus()}
                                 blurOnSubmit={false}
+                                maxLength={100}
                             />
                         </View>
 
@@ -92,6 +105,7 @@ export default function AddPasswordScreen({ navigation, route }) {
                                 onSubmitEditing={() => passwordRef.current.focus()}
                                 blurOnSubmit={false}
                                 autoCapitalize="none"
+                                maxLength={100}
                             />
                         </View>
 
@@ -108,6 +122,7 @@ export default function AddPasswordScreen({ navigation, route }) {
                                 returnKeyType="next"
                                 onSubmitEditing={() => commentsRef.current.focus()}
                                 blurOnSubmit={false}
+                                maxLength={256}
                             />
                         </View>
 
@@ -124,6 +139,7 @@ export default function AddPasswordScreen({ navigation, route }) {
                                 numberOfLines={3}
                                 returnKeyType="done"
                                 onSubmitEditing={handleSave}
+                                maxLength={500}
                             />
                         </View>
                     </View>
