@@ -30,7 +30,7 @@ export default function App() {
         <Stack.Screen
           name="Home"
           component={HomeScreen}
-          options={{ title: 'My Passwords', headerLeft: null }}
+          options={{ title: 'My Credentials', headerLeft: null }}
         />
         <Stack.Screen
           name="AddPassword"

@@ -53,7 +53,7 @@ export default function HomeScreen({ navigation }) {
                             setTimeout(async () => {
                                 const finalStatus = await getSyncStatus();
                                 setSyncStatus(finalStatus);
-                                loadPasswords(); // Reload to show synced data
+                                loadPasswords({ silent: true }); // Reload silently to show synced data
                                 console.log('🔄 Background sync monitor complete');
                             }, 500);
                         }
@@ -189,8 +189,10 @@ export default function HomeScreen({ navigation }) {
         });
     }, [navigation]);
 
-    const loadPasswords = async () => {
-        setLoading(true);
+    const loadPasswords = async (options = { silent: false }) => {
+        if (!options.silent) {
+            setLoading(true);
+        }
         try {
             // Load from local database (offline-first)
             const data = getPasswords();
@@ -199,7 +201,9 @@ export default function HomeScreen({ navigation }) {
         } catch (error) {
             console.error('Error loading passwords:', error);
         } finally {
-            setLoading(false);
+            if (!options.silent) {
+                setLoading(false);
+            }
         }
     };
 
