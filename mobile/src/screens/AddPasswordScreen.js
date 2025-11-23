@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, TextInput, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { addPasswordOffline, updatePasswordOffline } from '../services/SyncService';
 import { encryptPassword, decryptPassword } from '../services/Encryption';
+import CustomAlert from '../components/CustomAlert';
 
 export default function AddPasswordScreen({ navigation, route }) {
     const itemToEdit = route.params?.item;
@@ -12,6 +13,14 @@ export default function AddPasswordScreen({ navigation, route }) {
     const [password, setPassword] = useState('');
     const [comments, setComments] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [alertConfig, setAlertConfig] = useState({
+        visible: false,
+        title: '',
+        message: '',
+        type: 'info',
+        buttons: []
+    });
 
     const usernameRef = useRef(null);
     const passwordRef = useRef(null);
@@ -27,9 +36,41 @@ export default function AddPasswordScreen({ navigation, route }) {
         }
     }, [isEditMode, itemToEdit, navigation]);
 
+    // Calculate password strength
+    const getPasswordStrength = (pwd) => {
+        if (!pwd) return { strength: '', color: '#adb5bd', percentage: 0 };
+
+        let score = 0;
+
+        // Length criteria
+        if (pwd.length >= 8) score += 1;
+        if (pwd.length >= 12) score += 1;
+        if (pwd.length >= 16) score += 1;
+
+        // Character variety
+        if (/[a-z]/.test(pwd)) score += 1; // lowercase
+        if (/[A-Z]/.test(pwd)) score += 1; // uppercase
+        if (/[0-9]/.test(pwd)) score += 1; // numbers
+        if (/[^a-zA-Z0-9]/.test(pwd)) score += 1; // special chars
+
+        // Determine strength
+        if (score <= 2) return { strength: 'Weak', color: '#ff6b6b', percentage: 25 };
+        if (score <= 4) return { strength: 'Medium', color: '#ffa94d', percentage: 50 };
+        if (score <= 5) return { strength: 'Strong', color: '#51cf66', percentage: 75 };
+        return { strength: 'Very Strong', color: '#37b24d', percentage: 100 };
+    };
+
+    const passwordStrength = getPasswordStrength(password);
+
     const handleSave = async () => {
         if (!siteName || !username || !password) {
-            Alert.alert('Error', 'Please fill all required fields');
+            setAlertConfig({
+                visible: true,
+                title: 'Missing Information',
+                message: 'Please fill in all required fields: Website/App, Username, and Password.',
+                type: 'warning',
+                buttons: [{ text: 'OK', style: 'default' }]
+            });
             return;
         }
 
@@ -39,27 +80,34 @@ export default function AddPasswordScreen({ navigation, route }) {
 
             if (isEditMode) {
                 await updatePasswordOffline(itemToEdit.id, siteName, username, encrypted, comments);
-                Alert.alert(
-                    '✅ Password Updated!',
-                    'Your password has been saved locally and will sync to Google Sheets when you\'re online.',
-                    [{ text: 'OK', style: 'default' }]
-                );
+                setAlertConfig({
+                    visible: true,
+                    title: 'Password Updated!',
+                    message: 'Your password has been saved locally and will sync to Google Sheets when you\'re online.',
+                    type: 'success',
+                    buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
+                });
+                return;
             } else {
                 await addPasswordOffline(siteName, username, encrypted, comments);
-                Alert.alert(
-                    '✅ Password Saved!',
-                    'Your password is securely saved on this device and will automatically sync to Google Sheets when you\'re online.',
-                    [{ text: 'OK', style: 'default' }]
-                );
+                setAlertConfig({
+                    visible: true,
+                    title: 'Password Saved!',
+                    message: 'Your password is securely saved on this device and will automatically sync to Google Sheets when you\'re online.',
+                    type: 'success',
+                    buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
+                });
+                return;
             }
 
-            navigation.goBack();
         } catch (error) {
-            Alert.alert(
-                '❌ Save Failed',
-                'Could not save password. Please try again.\n\nError: ' + error.message,
-                [{ text: 'OK', style: 'cancel' }]
-            );
+            setAlertConfig({
+                visible: true,
+                title: 'Save Failed',
+                message: 'Could not save password. Please try again.\n\nError: ' + error.message,
+                type: 'error',
+                buttons: [{ text: 'OK', style: 'default' }]
+            });
             console.error(error);
         } finally {
             setLoading(false);
@@ -111,19 +159,47 @@ export default function AddPasswordScreen({ navigation, route }) {
 
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>PASSWORD</Text>
-                            <TextInput
-                                ref={passwordRef}
-                                style={styles.input}
-                                placeholder="Required"
-                                placeholderTextColor="#adb5bd"
-                                value={password}
-                                onChangeText={setPassword}
-                                secureTextEntry
-                                returnKeyType="next"
-                                onSubmitEditing={() => commentsRef.current.focus()}
-                                blurOnSubmit={false}
-                                maxLength={256}
-                            />
+                            <View style={styles.passwordContainer}>
+                                <TextInput
+                                    ref={passwordRef}
+                                    style={styles.passwordInput}
+                                    placeholder="Required"
+                                    placeholderTextColor="#adb5bd"
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    secureTextEntry={!showPassword}
+                                    returnKeyType="next"
+                                    onSubmitEditing={() => commentsRef.current.focus()}
+                                    blurOnSubmit={false}
+                                    maxLength={256}
+                                />
+                                <TouchableOpacity
+                                    onPress={() => setShowPassword(!showPassword)}
+                                    style={styles.eyeButton}
+                                >
+                                    <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Password Strength Indicator */}
+                            {password.length > 0 && (
+                                <View style={styles.strengthContainer}>
+                                    <View style={styles.strengthBar}>
+                                        <View
+                                            style={[
+                                                styles.strengthFill,
+                                                {
+                                                    width: `${passwordStrength.percentage}%`,
+                                                    backgroundColor: passwordStrength.color
+                                                }
+                                            ]}
+                                        />
+                                    </View>
+                                    <Text style={[styles.strengthText, { color: passwordStrength.color }]}>
+                                        {passwordStrength.strength}
+                                    </Text>
+                                </View>
+                            )}
                         </View>
 
                         <View style={styles.inputGroup}>
@@ -157,6 +233,16 @@ export default function AddPasswordScreen({ navigation, route }) {
                     </TouchableOpacity>
                 </ScrollView>
             </KeyboardAvoidingView>
+
+            {/* Custom Alert */}
+            <CustomAlert
+                visible={alertConfig.visible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                buttons={alertConfig.buttons}
+                onClose={() => setAlertConfig({ ...alertConfig, visible: false })}
+            />
         </SafeAreaView>
     );
 }
@@ -201,6 +287,50 @@ const styles = StyleSheet.create({
         padding: 16,
         fontSize: 16,
         color: '#212529',
+    },
+    passwordContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f8f9fa',
+        borderWidth: 1,
+        borderColor: '#e9ecef',
+        borderRadius: 12,
+    },
+    passwordInput: {
+        flex: 1,
+        padding: 16,
+        fontSize: 16,
+        color: '#212529',
+    },
+    eyeButton: {
+        padding: 16,
+    },
+    eyeIcon: {
+        fontSize: 20,
+    },
+    strengthContainer: {
+        marginTop: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    strengthBar: {
+        flex: 1,
+        height: 6,
+        backgroundColor: '#e9ecef',
+        borderRadius: 3,
+        overflow: 'hidden',
+    },
+    strengthFill: {
+        height: '100%',
+        borderRadius: 3,
+        transition: 'width 0.3s ease',
+    },
+    strengthText: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        minWidth: 80,
+        textAlign: 'right',
     },
     commentsInput: {
         height: 80,

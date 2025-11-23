@@ -120,33 +120,7 @@ password-manager/
 - [ ] Password history
 - [ ] Secure notes (non-password items)
 
-## Development Notes
 
-### Running the App
-```bash
-cd mobile
-npm install
-npm start
-```
-
-### Building for Production
-```bash
-# Android
-expo build:android
-
-# iOS  
-expo build:ios
-```
-
-### Testing
-- Manual testing on Expo Go app
-- Web testing in browser
-- No automated tests currently
-
-### Debugging
-- Console logs for sync operations
-- Network tab for API calls
-- Expo DevTools for general debugging
 
 ## Maintenance
 
@@ -162,17 +136,7 @@ expo build:ios
 - Enable 2FA on Google Account
 - Monitor for suspicious activity
 
-## Deployment
 
-### Mobile Apps
-- Build APK/IPA using Expo
-- Distribute via TestFlight (iOS) or direct APK (Android)
-- Not published to App Store/Play Store (personal use)
-
-### Backend
-- Google Apps Script auto-deploys on save
-- No server maintenance required
-- Scales automatically with Google's infrastructure
 
 ## Support & Documentation
 - Main README: Setup and usage instructions

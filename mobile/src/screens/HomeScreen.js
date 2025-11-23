@@ -196,7 +196,11 @@ export default function HomeScreen({ navigation }) {
         try {
             // Load from local database (offline-first)
             const data = getPasswords();
-            setPasswords(data);
+            // Sort by site name ascending
+            const sortedData = [...data].sort((a, b) =>
+                a.siteName.localeCompare(b.siteName, undefined, { sensitivity: 'base' })
+            );
+            setPasswords(sortedData);
             await updateSyncStatus();
         } catch (error) {
             console.error('Error loading passwords:', error);
@@ -454,7 +458,7 @@ const styles = StyleSheet.create({
     },
     listContent: {
         padding: 20,
-        paddingBottom: 100,
+        paddingBottom: 120,
     },
     center: {
         flex: 1,

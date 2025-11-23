@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, TextInput, Text, TouchableOpacity, StyleSheet, Alert, SafeAreaView, KeyboardAvoidingView, Platform, Modal, ScrollView } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
+import CustomAlert from '../components/CustomAlert';
 
 export default function LoginScreen({ navigation }) {
     const [pin, setPin] = useState('');
@@ -8,6 +9,16 @@ export default function LoginScreen({ navigation }) {
     const [newPin, setNewPin] = useState('');
     const [confirmPin, setConfirmPin] = useState('');
     const [biometricAvailable, setBiometricAvailable] = useState(false);
+    const pinInputRef = useRef(null);
+
+    // Custom alert state
+    const [alertConfig, setAlertConfig] = useState({
+        visible: false,
+        title: '',
+        message: '',
+        type: 'info',
+        buttons: []
+    });
 
     // Check if device has biometric authentication
     useEffect(() => {
@@ -24,7 +35,13 @@ export default function LoginScreen({ navigation }) {
         if (pin === '1234') {
             navigation.replace('Home');
         } else {
-            Alert.alert('Error', 'Invalid PIN');
+            setAlertConfig({
+                visible: true,
+                title: 'Invalid PIN',
+                message: 'The PIN you entered is incorrect. Please try again.',
+                type: 'error',
+                buttons: [{ text: 'Try Again', style: 'default' }]
+            });
             setPin('');
         }
     };
@@ -131,18 +148,33 @@ export default function LoginScreen({ navigation }) {
                 </View>
 
                 <View style={styles.form}>
-                    <TextInput
-                        style={styles.input}
-                        placeholder="••••"
-                        placeholderTextColor="#dee2e6"
-                        value={pin}
-                        onChangeText={setPin}
-                        secureTextEntry
-                        keyboardType="numeric"
-                        maxLength={4}
-                        onSubmitEditing={handleLogin}
-                        autoFocus
-                    />
+                    {/* PIN Input Container with Overlay */}
+                    <View style={styles.pinInputWrapper}>
+                        {/* PIN Digit Boxes */}
+                        <View style={styles.pinContainer}>
+                            {[0, 1, 2, 3].map((index) => (
+                                <View key={index} style={styles.pinBox}>
+                                    <Text style={styles.pinDot}>
+                                        {pin.length > index ? '●' : ''}
+                                    </Text>
+                                </View>
+                            ))}
+                        </View>
+
+                        {/* Transparent overlay input */}
+                        <TextInput
+                            ref={pinInputRef}
+                            style={styles.overlayInput}
+                            value={pin}
+                            onChangeText={setPin}
+                            keyboardType="numeric"
+                            maxLength={4}
+                            onSubmitEditing={handleLogin}
+                            autoFocus
+                            caretHidden
+                            textContentType="oneTimeCode"
+                        />
+                    </View>
 
                     <TouchableOpacity style={styles.button} onPress={handleLogin}>
                         <Text style={styles.buttonText}>Unlock Vault</Text>
@@ -255,6 +287,16 @@ export default function LoginScreen({ navigation }) {
                     </TouchableOpacity>
                 </View>
             </View>
+
+            {/* Custom Alert */}
+            <CustomAlert
+                visible={alertConfig.visible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                buttons={alertConfig.buttons}
+                onClose={() => setAlertConfig({ ...alertConfig, visible: false })}
+            />
         </SafeAreaView>
     );
 }
@@ -291,18 +333,38 @@ const styles = StyleSheet.create({
     form: {
         width: '100%',
     },
-    input: {
-        backgroundColor: '#f8f9fa',
-        borderWidth: 1,
-        borderColor: '#e9ecef',
-        borderRadius: 16,
-        padding: 20,
-        fontSize: 32,
-        textAlign: 'center',
-        letterSpacing: 10,
+    pinInputWrapper: {
+        position: 'relative',
         marginBottom: 30,
-        color: '#212529',
+    },
+    pinContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 16,
+    },
+    pinBox: {
+        width: 60,
+        height: 70,
+        backgroundColor: '#f8f9fa',
+        borderWidth: 2,
+        borderColor: '#007AFF',
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    pinDot: {
+        fontSize: 40,
+        color: '#007AFF',
         fontWeight: 'bold',
+    },
+    overlayInput: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        opacity: 0,
+        fontSize: 1,
     },
     button: {
         backgroundColor: '#007AFF',
