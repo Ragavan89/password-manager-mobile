@@ -12,6 +12,7 @@ export default function HomeScreen({ navigation }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState({});
+    const [expandedCards, setExpandedCards] = useState({});
     const [syncStatus, setSyncStatus] = useState({ isOnline: true, pendingOperations: 0, isSyncing: false });
 
 
@@ -221,6 +222,10 @@ export default function HomeScreen({ navigation }) {
         setShowPassword(prev => ({ ...prev, [id]: !prev[id] }));
     };
 
+    const toggleExpand = (id) => {
+        setExpandedCards(prev => ({ ...prev, [id]: !prev[id] }));
+    };
+
     const copyToClipboard = async (text, label) => {
         await Clipboard.setStringAsync(text);
         Alert.alert('Copied', `${label} copied to clipboard!`);
@@ -265,83 +270,104 @@ export default function HomeScreen({ navigation }) {
 
     const renderItem = ({ item }) => {
         const displayPassword = decryptPassword(item.encryptedPassword);
+        const isExpanded = expandedCards[item.id];
 
         return (
             <View style={styles.card}>
-                <View style={styles.cardHeader}>
+                <TouchableOpacity
+                    style={styles.cardHeader}
+                    onPress={() => toggleExpand(item.id)}
+                    activeOpacity={0.7}
+                >
                     <View style={styles.iconContainer}>
                         <Text style={styles.siteInitial}>{item.siteName.charAt(0).toUpperCase()}</Text>
                     </View>
                     <View style={styles.headerText}>
                         <Text style={styles.siteName}>{item.siteName}</Text>
+                        {!isExpanded && (
+                            <Text style={styles.username}>{item.username}</Text>
+                        )}
                     </View>
-                    <TouchableOpacity onPress={() => navigation.navigate('AddPassword', { item })} style={styles.editButton}>
+                    <TouchableOpacity
+                        onPress={(e) => {
+                            e.stopPropagation();
+                            navigation.navigate('AddPassword', { item });
+                        }}
+                        style={styles.editButton}
+                    >
                         <Text style={styles.editIcon}>✏️</Text>
                     </TouchableOpacity>
-                </View>
-
-                <View style={styles.divider} />
-
-                <View style={styles.cardBody}>
-                    <View style={styles.fieldRow}>
-                        <View style={styles.fieldContainer}>
-                            <Text style={styles.label}>USERNAME</Text>
-                            <Text style={styles.value}>{item.username}</Text>
-                        </View>
-                        <TouchableOpacity onPress={() => copyToClipboard(item.username, 'Username')} style={styles.iconButton}>
-                            <Text style={styles.iconText}>📋</Text>
-                        </TouchableOpacity>
+                    <View style={styles.expandButton}>
+                        <Text style={styles.expandIcon}>{isExpanded ? '▲' : '▼'}</Text>
                     </View>
+                </TouchableOpacity>
 
-                    <View style={styles.divider} />
+                {isExpanded && (
+                    <>
+                        <View style={styles.divider} />
 
-                    <View style={styles.fieldRow}>
-                        <View style={styles.fieldContainer}>
-                            <Text style={styles.label}>PASSWORD</Text>
-                            <Text style={styles.password}>
-                                {showPassword[item.id] ? displayPassword : '••••••••••••'}
-                            </Text>
-                        </View>
-                        <View style={styles.actionsRow}>
-                            <TouchableOpacity onPress={() => toggleVisibility(item.id)} style={styles.iconButton}>
-                                <Text style={styles.iconText}>{showPassword[item.id] ? '👁️‍🗨️' : '👁️'}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => copyToClipboard(displayPassword, 'Password')} style={styles.iconButton}>
-                                <Text style={styles.iconText}>📋</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-
-                    {item.comments && (
-                        <>
-                            <View style={styles.divider} />
+                        <View style={styles.cardBody}>
                             <View style={styles.fieldRow}>
                                 <View style={styles.fieldContainer}>
-                                    <Text style={styles.label}>COMMENTS</Text>
-                                    <Text style={styles.value}>{item.comments}</Text>
+                                    <Text style={styles.label}>USERNAME</Text>
+                                    <Text style={styles.value}>{item.username}</Text>
                                 </View>
+                                <TouchableOpacity onPress={() => copyToClipboard(item.username, 'Username')} style={styles.iconButton}>
+                                    <Text style={styles.iconText}>📋</Text>
+                                </TouchableOpacity>
                             </View>
-                        </>
-                    )}
 
-                    {item.lastModified && (
-                        <>
                             <View style={styles.divider} />
+
                             <View style={styles.fieldRow}>
                                 <View style={styles.fieldContainer}>
-                                    <Text style={styles.label}>LAST MODIFIED</Text>
-                                    <Text style={styles.timestamp}>
-                                        {formatDate(item.lastModified)}
+                                    <Text style={styles.label}>PASSWORD</Text>
+                                    <Text style={styles.password}>
+                                        {showPassword[item.id] ? displayPassword : '••••••••••••'}
                                     </Text>
                                 </View>
+                                <View style={styles.actionsRow}>
+                                    <TouchableOpacity onPress={() => toggleVisibility(item.id)} style={styles.iconButton}>
+                                        <Text style={styles.iconText}>{showPassword[item.id] ? '👁️‍🗨️' : '👁️'}</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={() => copyToClipboard(displayPassword, 'Password')} style={styles.iconButton}>
+                                        <Text style={styles.iconText}>📋</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-                        </>
-                    )}
-                </View>
 
-                <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteButton}>
-                    <Text style={styles.deleteText}>Delete</Text>
-                </TouchableOpacity>
+                            {item.comments && (
+                                <>
+                                    <View style={styles.divider} />
+                                    <View style={styles.fieldRow}>
+                                        <View style={styles.fieldContainer}>
+                                            <Text style={styles.label}>COMMENTS</Text>
+                                            <Text style={styles.value}>{item.comments}</Text>
+                                        </View>
+                                    </View>
+                                </>
+                            )}
+
+                            {item.lastModified && (
+                                <>
+                                    <View style={styles.divider} />
+                                    <View style={styles.fieldRow}>
+                                        <View style={styles.fieldContainer}>
+                                            <Text style={styles.label}>LAST MODIFIED</Text>
+                                            <Text style={styles.timestamp}>
+                                                {formatDate(item.lastModified)}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </>
+                            )}
+                        </View>
+
+                        <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteButton}>
+                            <Text style={styles.deleteText}>Delete</Text>
+                        </TouchableOpacity>
+                    </>
+                )}
             </View>
         );
     };
@@ -358,11 +384,22 @@ export default function HomeScreen({ navigation }) {
             )}
             {/* Sync Status Banners */}
             {!syncStatus.isConfigured && (
-                <View style={[styles.lastSyncBanner, { backgroundColor: '#fff3bf' }]}>
-                    <Text style={[styles.lastSyncText, { color: '#f08c00' }]}>
-                        ⚠️ Local Only Mode (Cloud Sync Not Configured)
-                    </Text>
-                </View>
+                <TouchableOpacity
+                    style={styles.dataLossWarningBanner}
+                    onPress={() => navigation.navigate('Settings')}
+                    activeOpacity={0.8}
+                >
+                    <View style={styles.warningContent}>
+                        <Text style={styles.warningIcon}>⚠️</Text>
+                        <View style={styles.warningTextContainer}>
+                            <Text style={styles.warningTitle}>WARNING: Local Storage Only</Text>
+                            <Text style={styles.warningMessage}>
+                                Your passwords are NOT backed up. If you uninstall this app, all passwords will be permanently lost.
+                            </Text>
+                            <Text style={styles.warningAction}>👉 Tap here to configure cloud sync</Text>
+                        </View>
+                    </View>
+                </TouchableOpacity>
             )}
 
             {syncStatus.isConfigured && syncStatus.isOnline && syncStatus.isSyncing && (
@@ -620,6 +657,60 @@ const styles = StyleSheet.create({
     },
     editIcon: {
         fontSize: 16,
+    },
+    expandButton: {
+        marginLeft: 8,
+        backgroundColor: '#f1f3f5',
+        borderRadius: 18,
+        width: 36,
+        height: 36,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    expandIcon: {
+        fontSize: 22,
+        color: '#495057',
+        fontWeight: 'bold',
+        textAlign: 'center',
+        lineHeight: 22,
+    },
+    dataLossWarningBanner: {
+        backgroundColor: '#ff8787',
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderBottomWidth: 2,
+        borderBottomColor: '#fa5252',
+    },
+    warningContent: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+    },
+    warningIcon: {
+        fontSize: 24,
+        marginRight: 12,
+        marginTop: 2,
+    },
+    warningTextContainer: {
+        flex: 1,
+    },
+    warningTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#fff',
+        marginBottom: 6,
+        letterSpacing: 0.5,
+    },
+    warningMessage: {
+        fontSize: 12,
+        color: '#fff',
+        lineHeight: 18,
+        marginBottom: 6,
+    },
+    warningAction: {
+        fontSize: 12,
+        color: '#fff',
+        fontWeight: '600',
+        fontStyle: 'italic',
     },
     offlineBanner: {
         backgroundColor: '#fff3cd',

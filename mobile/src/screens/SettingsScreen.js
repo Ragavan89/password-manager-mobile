@@ -6,6 +6,7 @@ const STORE_KEY = 'SHEETS_API_URL';
 
 export default function SettingsScreen({ navigation }) {
     const [url, setUrl] = useState('');
+    const [isConfigured, setIsConfigured] = useState(false);
 
     useEffect(() => {
         loadUrl();
@@ -19,7 +20,12 @@ export default function SettingsScreen({ navigation }) {
             } else {
                 storedUrl = await SecureStore.getItemAsync(STORE_KEY);
             }
-            if (storedUrl) setUrl(storedUrl);
+            if (storedUrl) {
+                setUrl(storedUrl);
+                setIsConfigured(true);
+            } else {
+                setIsConfigured(false);
+            }
         } catch (e) {
             console.error('Failed to load URL', e);
         }
@@ -56,6 +62,28 @@ export default function SettingsScreen({ navigation }) {
                 </Text>
             </View>
 
+            {/* Data Loss Warning Card - Only show when not configured */}
+            {!isConfigured && (
+                <View style={styles.dataLossWarningCard}>
+                    <Text style={styles.warningCardIcon}>⚠️</Text>
+                    <Text style={styles.warningCardTitle}>Data Loss Risk</Text>
+                    <Text style={styles.warningCardText}>
+                        Your passwords are currently stored ONLY on this device. If you:
+                    </Text>
+                    <View style={styles.warningList}>
+                        <Text style={styles.warningListItem}>• Uninstall this app</Text>
+                        <Text style={styles.warningListItem}>• Factory reset your device</Text>
+                        <Text style={styles.warningListItem}>• Lose or damage your device</Text>
+                    </View>
+                    <Text style={styles.warningCardEmphasis}>
+                        ALL YOUR PASSWORDS WILL BE PERMANENTLY LOST.
+                    </Text>
+                    <Text style={styles.warningCardAction}>
+                        Configure cloud sync below to protect your data.
+                    </Text>
+                </View>
+            )}
+
             {/* Info Card */}
             <View style={styles.infoCard}>
                 <Text style={styles.infoIcon}>ℹ️</Text>
@@ -70,19 +98,27 @@ export default function SettingsScreen({ navigation }) {
                 <Text style={styles.stepsTitle}>📋 Quick Setup Steps:</Text>
                 <View style={styles.step}>
                     <Text style={styles.stepNumber}>1.</Text>
-                    <Text style={styles.stepText}>Create a Google Sheet</Text>
+                    <Text style={styles.stepText}>Copy the Template Google Sheet</Text>
                 </View>
                 <View style={styles.step}>
                     <Text style={styles.stepNumber}>2.</Text>
-                    <Text style={styles.stepText}>Add Google Apps Script</Text>
+                    <Text style={styles.stepText}>Open Extensions → Apps Script</Text>
                 </View>
                 <View style={styles.step}>
                     <Text style={styles.stepNumber}>3.</Text>
-                    <Text style={styles.stepText}>Deploy as Web App</Text>
+                    <Text style={styles.stepText}>Deploy → New deployment → Web app</Text>
                 </View>
                 <View style={styles.step}>
                     <Text style={styles.stepNumber}>4.</Text>
-                    <Text style={styles.stepText}>Paste the URL below</Text>
+                    <Text style={styles.stepText}>Set access to "Anyone" and Deploy</Text>
+                </View>
+                <View style={styles.step}>
+                    <Text style={styles.stepNumber}>5.</Text>
+                    <Text style={styles.stepText}>Copy the Web App URL</Text>
+                </View>
+                <View style={styles.step}>
+                    <Text style={styles.stepNumber}>6.</Text>
+                    <Text style={styles.stepText}>Paste the URL below and Save</Text>
                 </View>
             </View>
 
@@ -160,6 +196,62 @@ const styles = StyleSheet.create({
         color: '#6c757d',
         textAlign: 'center',
         lineHeight: 20,
+    },
+    dataLossWarningCard: {
+        backgroundColor: '#ff8787',
+        margin: 16,
+        padding: 18,
+        borderRadius: 12,
+        borderLeftWidth: 5,
+        borderLeftColor: '#fa5252',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    warningCardIcon: {
+        fontSize: 32,
+        marginBottom: 10,
+        textAlign: 'center',
+    },
+    warningCardTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#fff',
+        marginBottom: 12,
+        textAlign: 'center',
+        letterSpacing: 0.5,
+    },
+    warningCardText: {
+        fontSize: 14,
+        color: '#fff',
+        lineHeight: 20,
+        marginBottom: 8,
+    },
+    warningList: {
+        marginLeft: 12,
+        marginBottom: 12,
+    },
+    warningListItem: {
+        fontSize: 14,
+        color: '#fff',
+        lineHeight: 22,
+        marginBottom: 4,
+    },
+    warningCardEmphasis: {
+        fontSize: 15,
+        fontWeight: 'bold',
+        color: '#fff',
+        textAlign: 'center',
+        marginBottom: 12,
+        letterSpacing: 0.5,
+    },
+    warningCardAction: {
+        fontSize: 13,
+        color: '#fff',
+        textAlign: 'center',
+        fontStyle: 'italic',
     },
     infoCard: {
         backgroundColor: '#e7f5ff',

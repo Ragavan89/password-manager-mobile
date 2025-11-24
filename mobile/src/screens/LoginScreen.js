@@ -143,7 +143,7 @@ export default function LoginScreen({ navigation }) {
             >
                 <View style={styles.header}>
                     <Text style={styles.icon}>🔒</Text>
-                    <Text style={styles.title}>SecurePass Vault</Text>
+                    <Text style={styles.title}>KeyVault Pro</Text>
                     <Text style={styles.subtitle}>Enter your Master PIN to unlock</Text>
                 </View>
 
@@ -268,11 +268,11 @@ export default function LoginScreen({ navigation }) {
             </Modal>
             {/* Footer with Copyright & Legal */}
             <View style={styles.footer}>
-                <Text style={styles.copyrightText}>© 2025 SecurePass Vault • v1.0.0</Text>
+                <Text style={styles.copyrightText}>© 2025 KeyVault Pro • v1.0.0</Text>
                 <View style={styles.legalLinks}>
                     <TouchableOpacity onPress={() => Alert.alert(
                         'Terms of Service',
-                        'By using SecurePass Vault, you agree to:\n\n1. Security: You are responsible for maintaining the confidentiality of your Master PIN and recovery methods.\n\n2. Liability: This software is provided "as is". We are not liable for any data loss or security breaches resulting from device compromise or lost credentials.\n\n3. Usage: This app is for personal use.\n\n4. Updates: We may update these terms to reflect app changes.',
+                        'By using KeyVault Pro, you agree to:\n\n1. Security: You are responsible for maintaining the confidentiality of your Master PIN and recovery methods.\n\n2. Liability: This software is provided "as is". We are not liable for any data loss or security breaches resulting from device compromise or lost credentials.\n\n3. Usage: This app is for personal use.\n\n4. Updates: We may update these terms to reflect app changes.',
                         [{ text: 'I Agree' }]
                     )}>
                         <Text style={styles.legalLinkText}>Terms</Text>
