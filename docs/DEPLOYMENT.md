@@ -27,6 +27,12 @@ Before running any commands, ensure you have:
 
 ### Step 1: Create a Google Sheet
 
+**Option A: Use Template (Recommended)**
+1. Click this link to make a copy: [Password Manager Template](https://docs.google.com/spreadsheets/d/115IizwRB6BFuIKbWIFeuKsAEtIhm3ON50RRGv3sRIu8/copy)
+2. Rename your copy (e.g., "My Password Manager")
+3. The headers and Apps Script are already set up! Skip to **Step 3**.
+
+**Option B: Create from Scratch**
 1. Go to [Google Sheets](https://sheets.google.com)
 2. Create a new spreadsheet
 3. Name it "Password Manager" (or any name you prefer)
@@ -35,7 +41,7 @@ Before running any commands, ensure you have:
    ID | SiteName | Username | Password | LastModified | Comments
    ```
 
-### Step 2: Set Up Apps Script
+### Step 2: Set Up Apps Script (Skip if you used the template)
 
 1. In your Google Sheet, click **Extensions** → **Apps Script**
 2. Delete any existing code

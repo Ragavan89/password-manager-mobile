@@ -81,7 +81,7 @@ export default function SetupGuideScreen() {
 
                 <TouchableOpacity
                     style={styles.button}
-                    onPress={() => openLink('https://docs.google.com/spreadsheets/d/1RBMJ33tfYVcHzZErGW6dhWM7kWvnw23PtYS4l2DBAHY/edit?gid=0#gid=0')}
+                    onPress={() => openLink('https://docs.google.com/spreadsheets/d/115IizwRB6BFuIKbWIFeuKsAEtIhm3ON50RRGv3sRIu8/copy')}
                 >
                     <Text style={styles.buttonText}>Open Template Sheet</Text>
                 </TouchableOpacity>
