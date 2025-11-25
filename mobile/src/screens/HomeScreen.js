@@ -13,6 +13,7 @@ export default function HomeScreen({ navigation }) {
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState({});
     const [expandedCards, setExpandedCards] = useState({});
+    const [decryptedPasswords, setDecryptedPasswords] = useState({});
     const [syncStatus, setSyncStatus] = useState({ isOnline: true, pendingOperations: 0, isSyncing: false });
 
 
@@ -202,6 +203,14 @@ export default function HomeScreen({ navigation }) {
                 a.siteName.localeCompare(b.siteName, undefined, { sensitivity: 'base' })
             );
             setPasswords(sortedData);
+
+            // Decrypt all passwords asynchronously
+            const decrypted = {};
+            for (const item of sortedData) {
+                decrypted[item.id] = await decryptPassword(item.encryptedPassword);
+            }
+            setDecryptedPasswords(decrypted);
+
             await updateSyncStatus();
         } catch (error) {
             console.error('Error loading passwords:', error);
@@ -269,7 +278,7 @@ export default function HomeScreen({ navigation }) {
     };
 
     const renderItem = ({ item }) => {
-        const displayPassword = decryptPassword(item.encryptedPassword);
+        const displayPassword = decryptedPasswords[item.id] || '';
         const isExpanded = expandedCards[item.id];
 
         return (

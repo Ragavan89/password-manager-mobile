@@ -30,7 +30,8 @@ export default function AddPasswordScreen({ navigation, route }) {
         if (isEditMode) {
             setSiteName(itemToEdit.siteName);
             setUsername(itemToEdit.username);
-            setPassword(decryptPassword(itemToEdit.encryptedPassword));
+            // Decrypt password asynchronously
+            decryptPassword(itemToEdit.encryptedPassword).then(setPassword);
             setComments(itemToEdit.comments || '');
             navigation.setOptions({ title: 'Edit Password' });
         }
@@ -76,7 +77,7 @@ export default function AddPasswordScreen({ navigation, route }) {
 
         setLoading(true);
         try {
-            const encrypted = encryptPassword(password);
+            const encrypted = await encryptPassword(password);
 
             if (isEditMode) {
                 await updatePasswordOffline(itemToEdit.id, siteName, username, encrypted, comments);
