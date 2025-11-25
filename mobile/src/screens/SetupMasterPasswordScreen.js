@@ -179,7 +179,10 @@ export default function SetupMasterPasswordScreen({ navigation }) {
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={styles.keyboardView}
             >
-                <ScrollView contentContainerStyle={styles.scrollContent}>
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    keyboardShouldPersistTaps="handled"
+                >
                     <View style={styles.header}>
                         <Text style={styles.icon}>🔐</Text>
                         <Text style={styles.title}>Secure Your Vault</Text>
@@ -290,7 +293,7 @@ const styles = StyleSheet.create({
     scrollContent: {
         padding: 24,
         paddingTop: 16,
-        paddingBottom: 40,
+        paddingBottom: 100,
     },
     header: {
         alignItems: 'center',

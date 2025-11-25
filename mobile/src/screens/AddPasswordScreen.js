@@ -121,7 +121,10 @@ export default function AddPasswordScreen({ navigation, route }) {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
             >
-                <ScrollView contentContainerStyle={styles.content}>
+                <ScrollView
+                    contentContainerStyle={styles.content}
+                    keyboardShouldPersistTaps="handled"
+                >
                     <Text style={styles.headerTitle}>{isEditMode ? 'Edit Entry' : 'New Entry'}</Text>
                     <Text style={styles.headerSubtitle}>Securely save your credentials</Text>
 
@@ -254,24 +257,25 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
     },
     content: {
-        padding: 24,
+        padding: 20,
+        paddingBottom: 100,
     },
     headerTitle: {
-        fontSize: 32,
+        fontSize: 28,
         fontWeight: 'bold',
         color: '#212529',
-        marginBottom: 8,
+        marginBottom: 6,
     },
     headerSubtitle: {
-        fontSize: 16,
+        fontSize: 14,
         color: '#868e96',
-        marginBottom: 40,
-    },
-    form: {
         marginBottom: 30,
     },
-    inputGroup: {
+    form: {
         marginBottom: 24,
+    },
+    inputGroup: {
+        marginBottom: 18,
     },
     label: {
         fontSize: 12,
