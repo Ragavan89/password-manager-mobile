@@ -7,6 +7,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import AddPasswordScreen from './src/screens/AddPasswordScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import SetupGuideScreen from './src/screens/SetupGuideScreen';
+import SetupMasterPasswordScreen from './src/screens/SetupMasterPasswordScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import { initDatabase } from './src/services/Database';
 
@@ -46,6 +47,11 @@ export default function App() {
           name="SetupGuide"
           component={SetupGuideScreen}
           options={{ title: 'Setup Guide' }}
+        />
+        <Stack.Screen
+          name="SetupMasterPassword"
+          component={SetupMasterPasswordScreen}
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>

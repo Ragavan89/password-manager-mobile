@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, TextInput, Text, TouchableOpacity, StyleSheet, Alert, SafeAreaView, KeyboardAvoidingView, Platform, Modal, ScrollView } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import CustomAlert from '../components/CustomAlert';
+import { isMasterPasswordSet } from '../services/Encryption';
 
 export default function LoginScreen({ navigation }) {
     const [pin, setPin] = useState('');
@@ -31,9 +32,20 @@ export default function LoginScreen({ navigation }) {
         setBiometricAvailable(compatible && enrolled);
     };
 
-    const handleLogin = () => {
+    const handleLogin = async () => {
         if (pin === '1234') {
-            navigation.replace('Home');
+            try {
+                const hasMasterPassword = await isMasterPasswordSet();
+                if (hasMasterPassword) {
+                    navigation.replace('Home');
+                } else {
+                    navigation.replace('SetupMasterPassword');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                // Fallback to home if check fails (shouldn't happen)
+                navigation.replace('Home');
+            }
         } else {
             setAlertConfig({
                 visible: true,
