@@ -1,10 +1,16 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet, Linking, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Linking, TouchableOpacity, Alert } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function SetupGuideScreen() {
     const openLink = (url) => {
         Linking.openURL(url);
+    };
+
+    const copyLink = async (url) => {
+        await Clipboard.setStringAsync(url);
+        Alert.alert('Copied', 'Template link copied to clipboard. You can send this to your PC or open it in a browser with "Desktop Site" enabled.');
     };
 
     return (
@@ -19,7 +25,7 @@ export default function SetupGuideScreen() {
                 <View style={styles.step}>
                     <Text style={styles.stepTitle}>Step 1: Get the Sheet</Text>
                     <Text style={styles.stepText}>
-                        You need your own Google Sheet to store passwords.
+                        You need your own Google Sheet to store passwords. (This creates a private copy in YOUR Google Drive).
                     </Text>
                     <Text style={styles.stepText}>
                         1. Open the Template Sheet (click the button at the bottom).
@@ -33,6 +39,9 @@ export default function SetupGuideScreen() {
                     <Text style={styles.stepTitle}>Step 2: Deploy the Script</Text>
                     <Text style={styles.stepText}>
                         1. In your new Sheet, go to <Text style={styles.bold}>Extensions {'>'} Apps Script</Text>.
+                    </Text>
+                    <Text style={styles.warningText}>
+                        Important: The "Deploy" button is hidden on mobile. Tap your browser menu (⋮ or AA) and select "Desktop Site" or "Request Desktop Website".
                     </Text>
                     <Text style={styles.stepText}>
                         2. Click the blue <Text style={styles.bold}>Deploy</Text> button (top right).
@@ -84,6 +93,13 @@ export default function SetupGuideScreen() {
                     onPress={() => openLink('https://docs.google.com/spreadsheets/d/115IizwRB6BFuIKbWIFeuKsAEtIhm3ON50RRGv3sRIu8/copy')}
                 >
                     <Text style={styles.buttonText}>Open Template Sheet</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.button, styles.secondaryButton]}
+                    onPress={() => copyLink('https://docs.google.com/spreadsheets/d/115IizwRB6BFuIKbWIFeuKsAEtIhm3ON50RRGv3sRIu8/copy')}
+                >
+                    <Text style={styles.secondaryButtonText}>Copy Template Link</Text>
                 </TouchableOpacity>
             </ScrollView>
         </SafeAreaView>
@@ -145,5 +161,26 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 18,
         fontWeight: 'bold',
+    },
+    secondaryButton: {
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        borderColor: '#007AFF',
+        marginTop: 15,
+    },
+    secondaryButtonText: {
+        color: '#007AFF',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    warningText: {
+        fontSize: 14,
+        color: '#D32F2F',
+        marginTop: 5,
+        marginBottom: 10,
+        fontStyle: 'italic',
+        backgroundColor: '#FFEBEE',
+        padding: 8,
+        borderRadius: 5,
     },
 });
