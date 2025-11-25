@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, TextInput, Text, TouchableOpacity, StyleSheet, Alert, SafeAreaView, KeyboardAvoidingView, Platform, Modal, ScrollView } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import CustomAlert from '../components/CustomAlert';
-import { isMasterPasswordSet } from '../services/Encryption';
+import { isMasterPasswordSet, isPINSet, verifyPIN } from '../services/Encryption';
 
 export default function LoginScreen({ navigation }) {
     const [pin, setPin] = useState('');
@@ -21,10 +21,19 @@ export default function LoginScreen({ navigation }) {
         buttons: []
     });
 
-    // Check if device has biometric authentication
+    // Check if PIN is set on mount
     useEffect(() => {
+        checkPINStatus();
         checkBiometricAvailability();
     }, []);
+
+    const checkPINStatus = async () => {
+        const pinSet = await isPINSet();
+        if (!pinSet) {
+            // No PIN set, navigate to PIN setup
+            navigation.replace('SetupPIN');
+        }
+    };
 
     const checkBiometricAvailability = async () => {
         const compatible = await LocalAuthentication.hasHardwareAsync();
@@ -33,7 +42,10 @@ export default function LoginScreen({ navigation }) {
     };
 
     const handleLogin = async () => {
-        if (pin === '1234') {
+        // Verify PIN
+        const isValid = await verifyPIN(pin);
+
+        if (isValid) {
             try {
                 const hasMasterPassword = await isMasterPasswordSet();
                 if (hasMasterPassword) {

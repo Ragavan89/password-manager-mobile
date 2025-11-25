@@ -5,9 +5,65 @@ import { ENCRYPTION_CONFIG, ENCRYPTION_MODES } from '../config/EncryptionConfig'
 // Keys for SecureStore
 const MASTER_PASSWORD_KEY = 'keyvault_master_password_hash';
 const ENCRYPTION_KEY_KEY = 'keyvault_encryption_key';
+const PIN_KEY = 'keyvault_user_pin_hash';
 
 // Fallback key for APP_SECRET_ONLY mode or legacy data
 const FALLBACK_SECRET = ENCRYPTION_CONFIG.APP_SECRET;
+
+/**
+ * Checks if a PIN has been set
+ * @returns {Promise<boolean>} True if PIN exists
+ */
+export const isPINSet = async () => {
+    try {
+        const hash = await SecureStore.getItemAsync(PIN_KEY);
+        return !!hash;
+    } catch (error) {
+        console.error('Error checking PIN:', error);
+        return false;
+    }
+};
+
+/**
+ * Sets up the user PIN
+ * @param {string} pin - The 4-digit PIN
+ * @returns {Promise<{success: boolean, error?: string}>} Result
+ */
+export const setupPIN = async (pin) => {
+    try {
+        if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+            return { success: false, error: 'PIN must be exactly 4 digits' };
+        }
+
+        // Hash the PIN for secure storage
+        const hash = CryptoJS.SHA256(pin).toString();
+        await SecureStore.setItemAsync(PIN_KEY, hash);
+
+        return { success: true };
+    } catch (error) {
+        console.error('Error setting PIN:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+/**
+ * Verifies the user PIN
+ * @param {string} pin - PIN to verify
+ * @returns {Promise<boolean>} True if correct
+ */
+export const verifyPIN = async (pin) => {
+    try {
+        const storedHash = await SecureStore.getItemAsync(PIN_KEY);
+        if (!storedHash) return false;
+
+        const inputHash = CryptoJS.SHA256(pin).toString();
+        return inputHash === storedHash;
+    } catch (error) {
+        console.error('Error verifying PIN:', error);
+        return false;
+    }
+};
+
 
 /**
  * Checks if a master password has been set

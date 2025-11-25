@@ -289,15 +289,16 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         padding: 24,
+        paddingTop: 16,
         paddingBottom: 40,
     },
     header: {
         alignItems: 'center',
-        marginBottom: 30,
+        marginBottom: 20,
     },
     icon: {
-        fontSize: 60,
-        marginBottom: 16,
+        fontSize: 48,
+        marginBottom: 12,
     },
     title: {
         fontSize: 28,
@@ -314,7 +315,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#e7f5ff',
         padding: 16,
         borderRadius: 12,
-        marginBottom: 24,
+        marginBottom: 16,
         borderLeftWidth: 4,
         borderLeftColor: '#1971c2',
     },
@@ -330,7 +331,7 @@ const styles = StyleSheet.create({
         lineHeight: 22,
     },
     form: {
-        marginBottom: 24,
+        marginBottom: 20,
     },
     inputLabel: {
         fontSize: 14,
@@ -383,7 +384,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff3cd',
         padding: 12,
         borderRadius: 12,
-        marginTop: 16,
+        marginTop: 12,
         borderLeftWidth: 4,
         borderLeftColor: '#ffc107',
     },
