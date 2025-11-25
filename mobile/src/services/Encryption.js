@@ -4,6 +4,7 @@ import { ENCRYPTION_CONFIG, ENCRYPTION_MODES } from '../config/EncryptionConfig'
 
 // Keys for SecureStore
 const MASTER_PASSWORD_KEY = 'keyvault_master_password_hash';
+const MASTER_PASSWORD_ENCRYPTED_KEY = 'keyvault_master_password_encrypted'; // For retrieval
 const ENCRYPTION_KEY_KEY = 'keyvault_encryption_key';
 const PIN_KEY = 'keyvault_user_pin_hash';
 
@@ -100,9 +101,13 @@ export const setupMasterPassword = async (password) => {
             iterations: ENCRYPTION_CONFIG.KEY_DERIVATION_ITERATIONS
         }).toString();
 
-        // 3. Store the hash and derived key securely
+        // 3. Encrypt the master password with APP_SECRET so it can be retrieved
+        const encryptedPassword = CryptoJS.AES.encrypt(password, FALLBACK_SECRET).toString();
+
+        // 4. Store the hash, derived key, and encrypted password securely
         await SecureStore.setItemAsync(MASTER_PASSWORD_KEY, hash);
         await SecureStore.setItemAsync(ENCRYPTION_KEY_KEY, derivedKey);
+        await SecureStore.setItemAsync(MASTER_PASSWORD_ENCRYPTED_KEY, encryptedPassword);
 
         return { success: true };
     } catch (error) {
@@ -126,6 +131,33 @@ export const verifyMasterPassword = async (password) => {
     } catch (error) {
         console.error('Error verifying master password:', error);
         return false;
+    }
+};
+
+/**
+ * Gets the master password (decrypted)
+ * @returns {Promise<{success: boolean, masterPassword?: string, error?: string}>} Result with master password
+ */
+export const getMasterPassword = async () => {
+    try {
+        const encryptedPassword = await SecureStore.getItemAsync(MASTER_PASSWORD_ENCRYPTED_KEY);
+
+        if (!encryptedPassword) {
+            return { success: false, error: 'Master password not found' };
+        }
+
+        // Decrypt the master password using APP_SECRET
+        const bytes = CryptoJS.AES.decrypt(encryptedPassword, FALLBACK_SECRET);
+        const masterPassword = bytes.toString(CryptoJS.enc.Utf8);
+
+        if (!masterPassword) {
+            return { success: false, error: 'Failed to decrypt master password' };
+        }
+
+        return { success: true, masterPassword };
+    } catch (error) {
+        console.error('Error getting master password:', error);
+        return { success: false, error: error.message };
     }
 };
 

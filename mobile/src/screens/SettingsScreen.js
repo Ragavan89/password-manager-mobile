@@ -1,12 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { View, TextInput, Button, StyleSheet, Text, Alert, Platform, ScrollView, TouchableOpacity } from 'react-native';
+import { View, TextInput, Button, StyleSheet, Text, Alert, Platform, ScrollView, TouchableOpacity, Modal } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import * as Clipboard from 'expo-clipboard';
+import { verifyPIN } from '../services/Encryption';
+import { getMasterPassword } from '../services/Encryption';
+import { isMasterPasswordRequired } from '../config/EncryptionConfig';
 
 const STORE_KEY = 'SHEETS_API_URL';
 
 export default function SettingsScreen({ navigation }) {
     const [url, setUrl] = useState('');
     const [isConfigured, setIsConfigured] = useState(false);
+
+    // View Master Password states
+    const [showPinModal, setShowPinModal] = useState(false);
+    const [pin, setPin] = useState('');
+    const [masterPassword, setMasterPassword] = useState('');
+    const [showMasterPassword, setShowMasterPassword] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
         loadUrl();
@@ -49,6 +60,65 @@ export default function SettingsScreen({ navigation }) {
             Alert.alert('Error', 'Failed to save URL');
             console.error(e);
         }
+    };
+
+    const handleViewMasterPassword = () => {
+        if (!isMasterPasswordRequired()) {
+            Alert.alert('Not Available', 'Master password is not available in the current encryption mode.');
+            return;
+        }
+        setShowPinModal(true);
+    };
+
+    const handleVerifyPin = async () => {
+        if (!pin || pin.length !== 4) {
+            Alert.alert('Invalid PIN', 'Please enter a 4-digit PIN');
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            // Verify PIN using the same function as LoginScreen
+            const isValid = await verifyPIN(pin);
+
+            if (isValid) {
+                // Get master password
+                const result = await getMasterPassword();
+
+                if (result.success) {
+                    setMasterPassword(result.masterPassword);
+                    setShowMasterPassword(true);
+                    setShowPinModal(false);
+                    setPin('');
+                } else {
+                    Alert.alert('Error', result.error || 'Failed to retrieve master password');
+                    setPin('');
+                }
+            } else {
+                Alert.alert('Error', 'Incorrect PIN');
+                setPin('');
+            }
+        } catch (error) {
+            Alert.alert('Error', 'An unexpected error occurred');
+            console.error(error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleCopyMasterPassword = async () => {
+        await Clipboard.setStringAsync(masterPassword);
+        Alert.alert('Copied! 📋', 'Master password copied to clipboard');
+    };
+
+    const handleCloseMasterPasswordModal = () => {
+        setShowMasterPassword(false);
+        setMasterPassword('');
+    };
+
+    const handleClosePinModal = () => {
+        setShowPinModal(false);
+        setPin('');
     };
 
     return (
@@ -165,6 +235,104 @@ export default function SettingsScreen({ navigation }) {
                     Your passwords are encrypted with AES-256 before syncing. Only you can decrypt them.
                 </Text>
             </View>
+
+            {/* View Master Password Section */}
+            {isMasterPasswordRequired() && (
+                <View style={styles.masterPasswordSection}>
+                    <Text style={styles.masterPasswordTitle}>🔑 Master Password</Text>
+                    <Text style={styles.masterPasswordDescription}>
+                        Need to switch devices? View your master password to set up the app on a new device.
+                    </Text>
+                    <TouchableOpacity
+                        style={styles.viewMasterPasswordButton}
+                        onPress={handleViewMasterPassword}
+                    >
+                        <Text style={styles.viewMasterPasswordButtonText}>👁️ View Master Password</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            {/* PIN Verification Modal */}
+            <Modal
+                visible={showPinModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={handleClosePinModal}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Enter Your PIN</Text>
+                        <Text style={styles.modalDescription}>
+                            Verify your identity to view the master password
+                        </Text>
+
+                        <TextInput
+                            style={styles.pinInput}
+                            placeholder="Enter 4-digit PIN"
+                            value={pin}
+                            onChangeText={setPin}
+                            keyboardType="number-pad"
+                            maxLength={4}
+                            secureTextEntry
+                            autoFocus
+                        />
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.cancelButton]}
+                                onPress={handleClosePinModal}
+                            >
+                                <Text style={styles.cancelButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.verifyButton]}
+                                onPress={handleVerifyPin}
+                                disabled={isLoading}
+                            >
+                                <Text style={styles.verifyButtonText}>
+                                    {isLoading ? 'Verifying...' : 'Verify'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Master Password Display Modal */}
+            <Modal
+                visible={showMasterPassword}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={handleCloseMasterPasswordModal}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Your Master Password</Text>
+                        <Text style={styles.modalWarning}>
+                            ⚠️ Keep this safe! You'll need it to set up the app on a new device.
+                        </Text>
+
+                        <View style={styles.passwordDisplay}>
+                            <Text style={styles.passwordText}>{masterPassword}</Text>
+                        </View>
+
+                        <TouchableOpacity
+                            style={styles.copyButton}
+                            onPress={handleCopyMasterPassword}
+                        >
+                            <Text style={styles.copyButtonText}>📋 Copy to Clipboard</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.closeButton}
+                            onPress={handleCloseMasterPasswordModal}
+                        >
+                            <Text style={styles.closeButtonText}>Close</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </ScrollView>
     );
 }
@@ -392,5 +560,158 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#2b8a3e',
         lineHeight: 18,
+    },
+    masterPasswordSection: {
+        backgroundColor: '#fff3cd',
+        margin: 16,
+        marginTop: 0,
+        marginBottom: 32,
+        padding: 18,
+        borderRadius: 12,
+        borderLeftWidth: 4,
+        borderLeftColor: '#ffc107',
+    },
+    masterPasswordTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#856404',
+        marginBottom: 8,
+    },
+    masterPasswordDescription: {
+        fontSize: 14,
+        color: '#856404',
+        lineHeight: 20,
+        marginBottom: 16,
+    },
+    viewMasterPasswordButton: {
+        backgroundColor: '#ffc107',
+        padding: 14,
+        borderRadius: 10,
+        alignItems: 'center',
+    },
+    viewMasterPasswordButtonText: {
+        color: '#000',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContent: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 24,
+        width: '85%',
+        maxWidth: 400,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    modalTitle: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: '#212529',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    modalDescription: {
+        fontSize: 14,
+        color: '#6c757d',
+        textAlign: 'center',
+        marginBottom: 20,
+        lineHeight: 20,
+    },
+    modalWarning: {
+        fontSize: 13,
+        color: '#856404',
+        backgroundColor: '#fff3cd',
+        padding: 12,
+        borderRadius: 8,
+        marginBottom: 16,
+        textAlign: 'center',
+        lineHeight: 18,
+    },
+    pinInput: {
+        borderWidth: 2,
+        borderColor: '#007AFF',
+        padding: 14,
+        fontSize: 18,
+        borderRadius: 10,
+        backgroundColor: '#f8f9fa',
+        textAlign: 'center',
+        marginBottom: 20,
+        letterSpacing: 8,
+    },
+    modalButtons: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+    modalButton: {
+        flex: 1,
+        padding: 14,
+        borderRadius: 10,
+        alignItems: 'center',
+    },
+    cancelButton: {
+        backgroundColor: '#f8f9fa',
+        borderWidth: 1,
+        borderColor: '#dee2e6',
+    },
+    cancelButtonText: {
+        color: '#495057',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    verifyButton: {
+        backgroundColor: '#007AFF',
+    },
+    verifyButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    passwordDisplay: {
+        backgroundColor: '#f8f9fa',
+        padding: 16,
+        borderRadius: 10,
+        borderWidth: 2,
+        borderColor: '#007AFF',
+        marginBottom: 16,
+    },
+    passwordText: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#212529',
+        textAlign: 'center',
+        letterSpacing: 1,
+    },
+    copyButton: {
+        backgroundColor: '#28a745',
+        padding: 14,
+        borderRadius: 10,
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    copyButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    closeButton: {
+        backgroundColor: '#6c757d',
+        padding: 14,
+        borderRadius: 10,
+        alignItems: 'center',
+    },
+    closeButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
     },
 });
