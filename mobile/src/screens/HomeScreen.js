@@ -2,9 +2,10 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Button, ActivityIndicator, RefreshControl, SafeAreaView, Alert, TextInput } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
-import { getPasswords } from '../services/Database';
-import { deletePasswordOffline, syncWithCloud, getSyncStatus, initSyncService } from '../services/SyncService';
+import * as HybridStorageService from '../services/HybridStorageService';
 import { decryptPassword } from '../services/Encryption';
+import { getCurrentUser } from '../services/FirebaseAuthService';
+import * as SecureStore from 'expo-secure-store';
 
 export default function HomeScreen({ navigation }) {
     const [passwords, setPasswords] = useState([]);
@@ -14,65 +15,31 @@ export default function HomeScreen({ navigation }) {
     const [showPassword, setShowPassword] = useState({});
     const [expandedCards, setExpandedCards] = useState({});
     const [decryptedPasswords, setDecryptedPasswords] = useState({});
-    const [syncStatus, setSyncStatus] = useState({ isOnline: true, pendingOperations: 0, isSyncing: false });
+    const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
+    const [lastSyncTime, setLastSyncTime] = useState(null);
+    const [syncing, setSyncing] = useState(false);
 
-
-    // Initialize sync service on mount
+    // Load cloud sync status on mount
     useEffect(() => {
-        initSyncService();
+        loadCloudSyncStatus();
     }, []);
 
     useFocusEffect(
         useCallback(() => {
             loadPasswords();
-            updateSyncStatus();
-
-            // Check if sync is already in progress (from add/edit)
-            // If so, start monitoring it
-            const checkAndMonitor = async () => {
-                const status = await getSyncStatus();
-                if (status.isSyncing) {
-                    console.log('🔍 Detected ongoing sync, starting monitor...');
-
-                    // Monitor sync status continuously
-                    let checkCount = 0;
-                    const maxChecks = 70; // 70 * 500ms = 35 seconds max
-
-                    const checkStatus = setInterval(async () => {
-                        const currentStatus = await getSyncStatus();
-                        setSyncStatus(currentStatus);
-                        checkCount++;
-
-                        // Stop checking when sync is complete OR timeout
-                        if (!currentStatus.isSyncing || checkCount >= maxChecks) {
-                            clearInterval(checkStatus);
-
-                            if (checkCount >= maxChecks) {
-                                console.warn('⏰ Status polling timeout - stopped checking');
-                            }
-
-                            // Final status update and reload passwords
-                            setTimeout(async () => {
-                                const finalStatus = await getSyncStatus();
-                                setSyncStatus(finalStatus);
-                                loadPasswords({ silent: true }); // Reload silently to show synced data
-                                console.log('🔄 Background sync monitor complete');
-                            }, 500);
-                        }
-                    }, 500); // Check every 500ms
-                }
-            };
-
-            checkAndMonitor();
-
-            // Sync only happens on app start, network change, or after add/edit/delete
-            // Not on every screen focus to avoid excessive syncing
+            loadCloudSyncStatus();
         }, [])
     );
 
-    const updateSyncStatus = async () => {
-        const status = await getSyncStatus();
-        setSyncStatus(status);
+    const loadCloudSyncStatus = async () => {
+        try {
+            const enabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
+            const lastSync = await HybridStorageService.getLastSyncTime();
+            setCloudSyncEnabled(enabled === 'true');
+            setLastSyncTime(lastSync);
+        } catch (error) {
+            console.error('Error loading cloud sync status:', error);
+        }
     };
 
 
@@ -95,52 +62,6 @@ export default function HomeScreen({ navigation }) {
                         }}
                     >
                         <Text style={{ fontSize: 20 }}>➕</Text>
-                    </TouchableOpacity>
-
-                    {/* Cloud Sync Button - Icon Only */}
-                    <TouchableOpacity
-                        onPress={async () => {
-                            // Start sync
-                            syncWithCloud();
-
-                            // Monitor sync status continuously
-                            let checkCount = 0;
-                            const maxChecks = 70; // 70 * 500ms = 35 seconds max
-
-                            const checkStatus = setInterval(async () => {
-                                const status = await getSyncStatus();
-                                setSyncStatus(status);
-                                checkCount++;
-
-                                // Stop checking when sync is complete OR timeout
-                                if (!status.isSyncing || checkCount >= maxChecks) {
-                                    clearInterval(checkStatus);
-
-                                    if (checkCount >= maxChecks) {
-                                        console.warn('⏰ Status polling timeout - stopped checking');
-                                    }
-
-                                    // Final status update and reload passwords
-                                    setTimeout(async () => {
-                                        const finalStatus = await getSyncStatus();
-                                        setSyncStatus(finalStatus);
-                                        loadPasswords(); // Reload to show synced data
-                                        console.log('🔄 Final status update complete');
-                                    }, 500);
-                                }
-                            }, 500); // Check every 500ms
-                        }}
-                        style={{
-                            marginHorizontal: 6,
-                            width: 36,
-                            height: 36,
-                            borderRadius: 18,
-                            backgroundColor: '#e7f5ff',
-                            justifyContent: 'center',
-                            alignItems: 'center'
-                        }}
-                    >
-                        <Text style={{ fontSize: 20 }}>🔄</Text>
                     </TouchableOpacity>
 
                     {/* Settings Button - Icon Only */}
@@ -189,15 +110,15 @@ export default function HomeScreen({ navigation }) {
                 color: '#343a40'
             }
         });
-    }, [navigation]);
+    }, [navigation, cloudSyncEnabled, syncing]);
 
     const loadPasswords = async (options = { silent: false }) => {
         if (!options.silent) {
             setLoading(true);
         }
         try {
-            // Load from local database (offline-first)
-            const data = getPasswords();
+            // Load from HybridStorageService (local-first with cloud sync)
+            const data = await HybridStorageService.getPasswords();
             // Sort by site name ascending
             const sortedData = [...data].sort((a, b) =>
                 a.siteName.localeCompare(b.siteName, undefined, { sensitivity: 'base' })
@@ -210,8 +131,6 @@ export default function HomeScreen({ navigation }) {
                 decrypted[item.id] = await decryptPassword(item.encryptedPassword);
             }
             setDecryptedPasswords(decrypted);
-
-            await updateSyncStatus();
         } catch (error) {
             console.error('Error loading passwords:', error);
         } finally {
@@ -222,9 +141,8 @@ export default function HomeScreen({ navigation }) {
     };
 
     const handleDelete = async (id) => {
-        await deletePasswordOffline(id);
+        await HybridStorageService.deletePassword(id);
         loadPasswords();
-        updateSyncStatus();
     };
 
     const toggleVisibility = (id) => {
@@ -383,16 +301,8 @@ export default function HomeScreen({ navigation }) {
 
     return (
         <SafeAreaView style={styles.container}>
-            {/* Sync Status Indicator */}
-            {!syncStatus.isOnline && (
-                <View style={styles.offlineBanner}>
-                    <Text style={styles.offlineText}>
-                        📡 Offline Mode {syncStatus.pendingOperations > 0 && `• ${syncStatus.pendingOperations} pending`}
-                    </Text>
-                </View>
-            )}
             {/* Sync Status Banners */}
-            {!syncStatus.isConfigured && (
+            {!cloudSyncEnabled && (
                 <TouchableOpacity
                     style={styles.dataLossWarningBanner}
                     onPress={() => navigation.navigate('Settings')}
@@ -405,25 +315,16 @@ export default function HomeScreen({ navigation }) {
                             <Text style={styles.warningMessage}>
                                 Your passwords are NOT backed up. If you uninstall this app, all passwords will be permanently lost.
                             </Text>
-                            <Text style={styles.warningAction}>👉 Tap here to configure cloud sync</Text>
+                            <Text style={styles.warningAction}>👉 Tap here to enable cloud sync</Text>
                         </View>
                     </View>
                 </TouchableOpacity>
             )}
 
-            {syncStatus.isConfigured && syncStatus.isOnline && syncStatus.isSyncing && (
+            {syncing && (
                 <View style={styles.syncingBanner}>
                     <ActivityIndicator size="small" color="#007AFF" />
                     <Text style={styles.syncingText}>  Syncing...</Text>
-                </View>
-            )}
-
-            {/* Last Synced Indicator */}
-            {syncStatus.isConfigured && syncStatus.isOnline && !syncStatus.isSyncing && syncStatus.lastSyncTime && (
-                <View style={styles.lastSyncBanner}>
-                    <Text style={styles.lastSyncText}>
-                        Last synced: {formatDate(new Date(syncStatus.lastSyncTime).toISOString())}
-                    </Text>
                 </View>
             )}
 

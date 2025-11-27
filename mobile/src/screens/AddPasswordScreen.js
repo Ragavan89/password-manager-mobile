@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, TextInput, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { addPasswordOffline, updatePasswordOffline } from '../services/SyncService';
+import * as HybridStorageService from '../services/HybridStorageService';
 import { encryptPassword, decryptPassword } from '../services/Encryption';
 import CustomAlert from '../components/CustomAlert';
 
@@ -80,21 +80,33 @@ export default function AddPasswordScreen({ navigation, route }) {
             const encrypted = await encryptPassword(password);
 
             if (isEditMode) {
-                await updatePasswordOffline(itemToEdit.id, siteName, username, encrypted, comments);
+                await HybridStorageService.updatePassword(itemToEdit.id, {
+                    siteName,
+                    username,
+                    encryptedPassword: encrypted,
+                    comments
+                });
+
                 setAlertConfig({
                     visible: true,
                     title: 'Password Updated!',
-                    message: 'Your password has been saved locally and will sync to Google Sheets when you\'re online.',
+                    message: 'Your password has been saved locally and will sync to the cloud if enabled.',
                     type: 'success',
                     buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
                 });
                 return;
             } else {
-                await addPasswordOffline(siteName, username, encrypted, comments);
+                await HybridStorageService.savePassword({
+                    siteName,
+                    username,
+                    encryptedPassword: encrypted,
+                    comments
+                });
+
                 setAlertConfig({
                     visible: true,
                     title: 'Password Saved!',
-                    message: 'Your password is securely saved on this device and will automatically sync to Google Sheets when you\'re online.',
+                    message: 'Your password is securely saved on this device and will sync to the cloud if enabled.',
                     type: 'success',
                     buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
                 });

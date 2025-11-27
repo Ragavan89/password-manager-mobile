@@ -10,6 +10,7 @@ import SetupGuideScreen from './src/screens/SetupGuideScreen';
 import SetupMasterPasswordScreen from './src/screens/SetupMasterPasswordScreen';
 import SetupPINScreen from './src/screens/SetupPINScreen';
 import LoginScreen from './src/screens/LoginScreen';
+import AuthScreen from './src/screens/AuthScreen';
 import { initDatabase } from './src/services/Database';
 
 const Stack = createStackNavigator();
@@ -58,6 +59,11 @@ export default function App() {
           name="SetupMasterPassword"
           component={SetupMasterPasswordScreen}
           options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Auth"
+          component={AuthScreen}
+          options={{ title: 'Enable Cloud Sync' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

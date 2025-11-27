@@ -40,7 +40,7 @@ export const addPassword = (siteName, username, encryptedPassword, comments = ''
     const newId = Date.now();
     const newEntry = { id: newId, siteName, username, encryptedPassword, lastModified, comments };
     localStorage.setItem('passwords', JSON.stringify([...existing, newEntry]));
-    return newId;
+    return { id: newId, lastModified };
   }
   const result = db.runSync(
     'INSERT INTO passwords (siteName, username, encryptedPassword, lastModified, comments) VALUES (?, ?, ?, ?, ?)',
@@ -50,7 +50,7 @@ export const addPassword = (siteName, username, encryptedPassword, comments = ''
     lastModified,
     comments
   );
-  return result.lastInsertRowId;
+  return { id: result.lastInsertRowId, lastModified };
 };
 
 export const getPasswords = () => {
@@ -69,7 +69,7 @@ export const updatePassword = (id, siteName, username, encryptedPassword, commen
       p.id === id ? { ...p, id, siteName, username, encryptedPassword, lastModified, comments } : p
     );
     localStorage.setItem('passwords', JSON.stringify(updated));
-    return;
+    return { lastModified };
   }
   db.runSync(
     'UPDATE passwords SET siteName = ?, username = ?, encryptedPassword = ?, lastModified = ?, comments = ? WHERE id = ?',
@@ -80,6 +80,7 @@ export const updatePassword = (id, siteName, username, encryptedPassword, commen
     comments,
     id
   );
+  return { lastModified };
 };
 
 export const upsertPassword = (id, siteName, username, encryptedPassword, lastModified, comments = '') => {

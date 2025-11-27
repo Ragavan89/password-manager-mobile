@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { View, TextInput, Button, StyleSheet, Text, Alert, Platform, ScrollView, TouchableOpacity, Modal } from 'react-native';
+import { View, StyleSheet, Text, Alert, ScrollView, TouchableOpacity, Modal, ActivityIndicator, TextInput } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as Clipboard from 'expo-clipboard';
 import { verifyPIN } from '../services/Encryption';
 import { getMasterPassword } from '../services/Encryption';
 import { isMasterPasswordRequired } from '../config/EncryptionConfig';
-
-const STORE_KEY = 'SHEETS_API_URL';
+import { getCurrentUser, signOut } from '../services/FirebaseAuthService';
+import { syncToCloud, getLastSyncTime } from '../services/HybridStorageService';
+import { firestore } from '../../firebase.config';
 
 export default function SettingsScreen({ navigation }) {
-    const [url, setUrl] = useState('');
-    const [isConfigured, setIsConfigured] = useState(false);
+    const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
+    const [userEmail, setUserEmail] = useState('');
+    const [lastSyncTime, setLastSyncTime] = useState(null);
+    const [syncing, setSyncing] = useState(false);
 
     // View Master Password states
     const [showPinModal, setShowPinModal] = useState(false);
@@ -20,46 +23,108 @@ export default function SettingsScreen({ navigation }) {
     const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
-        loadUrl();
+        loadCloudSyncStatus();
     }, []);
 
-    const loadUrl = async () => {
+    // Reload sync status when screen comes into focus
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            loadCloudSyncStatus();
+        });
+        return unsubscribe;
+    }, [navigation]);
+
+    const loadCloudSyncStatus = async () => {
         try {
-            let storedUrl = null;
-            if (Platform.OS === 'web') {
-                storedUrl = localStorage.getItem(STORE_KEY);
-            } else {
-                storedUrl = await SecureStore.getItemAsync(STORE_KEY);
-            }
-            if (storedUrl) {
-                setUrl(storedUrl);
-                setIsConfigured(true);
-            } else {
-                setIsConfigured(false);
-            }
-        } catch (e) {
-            console.error('Failed to load URL', e);
+            const enabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
+            const email = await SecureStore.getItemAsync('FIREBASE_USER_EMAIL');
+            const lastSync = await getLastSyncTime();
+
+            setCloudSyncEnabled(enabled === 'true');
+            setUserEmail(email || '');
+            setLastSyncTime(lastSync);
+        } catch (error) {
+            console.error('Error loading cloud sync status:', error);
         }
     };
 
-    const handleSave = async () => {
-        if (!url) {
-            Alert.alert('Error', 'Please enter a URL');
-            return;
-        }
+    const handleEnableCloudSync = () => {
+        navigation.navigate('Auth');
+    };
 
+    const handleDisableCloudSync = async () => {
+        Alert.alert(
+            'Disable Cloud Sync',
+            'Are you sure? Your passwords will remain on this device but will no longer sync to the cloud.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Disable',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await signOut();
+                            await SecureStore.deleteItemAsync('CLOUD_SYNC_ENABLED');
+                            await SecureStore.deleteItemAsync('FIREBASE_USER_EMAIL');
+                            await SecureStore.deleteItemAsync('LAST_SYNC_TIME');
+                            setCloudSyncEnabled(false);
+                            setUserEmail('');
+                            setLastSyncTime(null);
+                            Alert.alert('Success', 'Cloud sync disabled');
+                        } catch (error) {
+                            Alert.alert('Error', 'Failed to disable cloud sync');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleSyncNow = async () => {
+        setSyncing(true);
         try {
-            if (Platform.OS === 'web') {
-                localStorage.setItem(STORE_KEY, url);
+            const result = await syncToCloud();
+            if (result.success) {
+                const newSyncTime = await getLastSyncTime();
+                setLastSyncTime(newSyncTime);
+
+                // Show detailed sync results
+                const details = [];
+                if (result.uploaded > 0) details.push(`⬆️ Uploaded ${result.uploaded} new item${result.uploaded > 1 ? 's' : ''} to the cloud storage`);
+                if (result.downloaded > 0) details.push(`⬇️ Downloaded ${result.downloaded} new item${result.downloaded > 1 ? 's' : ''} from the cloud storage`);
+                if (result.updatedLocal > 0) details.push(`🔄 Updated ${result.updatedLocal} item${result.updatedLocal > 1 ? 's' : ''} on this device local storage`);
+                if (result.updatedCloud > 0) details.push(`☁️ Updated ${result.updatedCloud} item${result.updatedCloud > 1 ? 's' : ''} in the cloud storage`);
+
+                const message = details.length > 0
+                    ? `Sync successful!\n\n${details.join('\n')}`
+                    : 'Your vault is fully up to date! ✅\n\nNo changes were needed.';
+
+                Alert.alert('Sync Complete', message);
             } else {
-                await SecureStore.setItemAsync(STORE_KEY, url);
+                Alert.alert('Error', result.error || 'Failed to sync');
             }
-            Alert.alert('Success', 'URL saved successfully! Your passwords will now sync with Google Sheets.');
-            navigation.goBack();
-        } catch (e) {
-            Alert.alert('Error', 'Failed to save URL');
-            console.error(e);
+        } catch (error) {
+            Alert.alert('Error', 'Failed to sync to cloud');
+        } finally {
+            setSyncing(false);
         }
+    };
+
+
+
+    const formatSyncTime = (isoString) => {
+        if (!isoString) return 'Never';
+        const date = new Date(isoString);
+
+        // Format as YYYY-MM-DD HH:mm:ss (Local Time)
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
     };
 
     const handleViewMasterPassword = () => {
@@ -78,11 +143,9 @@ export default function SettingsScreen({ navigation }) {
 
         setIsLoading(true);
         try {
-            // Verify PIN using the same function as LoginScreen
             const isValid = await verifyPIN(pin);
 
             if (isValid) {
-                // Get master password
                 const result = await getMasterPassword();
 
                 if (result.success) {
@@ -123,134 +186,90 @@ export default function SettingsScreen({ navigation }) {
 
     return (
         <ScrollView style={styles.container}>
-            {/* Header Section */}
-            <View style={styles.headerSection}>
-                <Text style={styles.headerIcon}>⚙️</Text>
-                <Text style={styles.headerTitle}>Google Sheets Configuration</Text>
-                <Text style={styles.headerSubtitle}>
-                    Connect your app to Google Sheets to sync passwords across devices
-                </Text>
+            {/* Cloud Sync Section */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>☁️ Cloud Sync</Text>
+
+                {!cloudSyncEnabled ? (
+                    <View style={styles.card}>
+                        <Text style={styles.cardTitle}>Backup to Cloud</Text>
+                        <Text style={styles.cardDescription}>
+                            Enable cloud sync to backup your passwords and access them across devices.
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.primaryButton}
+                            onPress={handleEnableCloudSync}
+                        >
+                            <Text style={styles.primaryButtonText}>Enable Cloud Sync</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.hint}>
+                            💡 Optional - app works offline without cloud sync
+                        </Text>
+                    </View>
+                ) : (
+                    <View style={styles.card}>
+                        <View style={styles.syncStatus}>
+                            <Text style={styles.syncStatusLabel}>Status:</Text>
+                            <Text style={styles.syncStatusValue}>✅ Enabled</Text>
+                        </View>
+                        <View style={styles.syncStatus}>
+                            <Text style={styles.syncStatusLabel}>Account:</Text>
+                            <Text style={styles.syncStatusValue}>{userEmail}</Text>
+                        </View>
+                        <View style={styles.syncStatus}>
+                            <Text style={styles.syncStatusLabel}>Last Sync:</Text>
+                            <Text style={styles.syncStatusValue}>{formatSyncTime(lastSyncTime)}</Text>
+                        </View>
+
+                        <TouchableOpacity
+                            style={[styles.secondaryButton, syncing && styles.buttonDisabled]}
+                            onPress={handleSyncNow}
+                            disabled={syncing}
+                        >
+                            {syncing ? (
+                                <ActivityIndicator color="#007AFF" />
+                            ) : (
+                                <Text style={styles.secondaryButtonText}>🔄 Sync Now</Text>
+                            )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.dangerButton}
+                            onPress={handleDisableCloudSync}
+                        >
+                            <Text style={styles.dangerButtonText}>Sign Out</Text>
+                        </TouchableOpacity>
+
+
+                    </View>
+                )}
             </View>
 
-            {/* Data Loss Warning Card - Only show when not configured */}
-            {!isConfigured && (
-                <View style={styles.dataLossWarningCard}>
-                    <Text style={styles.warningCardIcon}>⚠️</Text>
-                    <Text style={styles.warningCardTitle}>Data Loss Risk</Text>
-                    <Text style={styles.warningCardText}>
-                        Your passwords are currently stored ONLY on this device. If you:
-                    </Text>
-                    <View style={styles.warningList}>
-                        <Text style={styles.warningListItem}>• Uninstall this app</Text>
-                        <Text style={styles.warningListItem}>• Factory reset your device</Text>
-                        <Text style={styles.warningListItem}>• Lose or damage your device</Text>
+            {/* Master Password Section */}
+            {isMasterPasswordRequired() && (
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>🔑 Master Password</Text>
+                    <View style={styles.card}>
+                        <Text style={styles.cardDescription}>
+                            View your master password to set up the app on a new device.
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.secondaryButton}
+                            onPress={handleViewMasterPassword}
+                        >
+                            <Text style={styles.secondaryButtonText}>👁️ View Master Password</Text>
+                        </TouchableOpacity>
                     </View>
-                    <Text style={styles.warningCardEmphasis}>
-                        ALL YOUR PASSWORDS WILL BE PERMANENTLY LOST.
-                    </Text>
-                    <Text style={styles.warningCardAction}>
-                        Configure cloud sync below to protect your data.
-                    </Text>
                 </View>
             )}
-
-            {/* Info Card */}
-            <View style={styles.infoCard}>
-                <Text style={styles.infoIcon}>ℹ️</Text>
-                <Text style={styles.infoTitle}>What is this?</Text>
-                <Text style={styles.infoText}>
-                    This app uses Google Sheets as a secure cloud database. Your passwords are encrypted before being stored in your personal Google Sheet.
-                </Text>
-            </View>
-
-            {/* Setup Steps */}
-            <View style={styles.stepsCard}>
-                <Text style={styles.stepsTitle}>📋 Quick Setup Steps:</Text>
-                <View style={styles.step}>
-                    <Text style={styles.stepNumber}>1.</Text>
-                    <Text style={styles.stepText}>Copy the Template Google Sheet</Text>
-                </View>
-                <View style={styles.step}>
-                    <Text style={styles.stepNumber}>2.</Text>
-                    <Text style={styles.stepText}>Open Extensions → Apps Script</Text>
-                </View>
-                <View style={styles.step}>
-                    <Text style={styles.stepNumber}>3.</Text>
-                    <Text style={styles.stepText}>Deploy → New deployment → Web app</Text>
-                </View>
-                <View style={styles.step}>
-                    <Text style={styles.stepNumber}>4.</Text>
-                    <Text style={styles.stepText}>Set access to "Anyone" and Deploy</Text>
-                </View>
-                <View style={styles.step}>
-                    <Text style={styles.stepNumber}>5.</Text>
-                    <Text style={styles.stepText}>Copy the Web App URL</Text>
-                </View>
-                <View style={styles.step}>
-                    <Text style={styles.stepNumber}>6.</Text>
-                    <Text style={styles.stepText}>Paste the URL below and Save</Text>
-                </View>
-            </View>
-
-            {/* URL Input Section */}
-            <View style={styles.inputSection}>
-                <Text style={styles.label}>Google Apps Script Web App URL</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="https://script.google.com/macros/s/..."
-                    value={url}
-                    onChangeText={setUrl}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    multiline
-                    numberOfLines={3}
-                />
-                <Text style={styles.hint}>
-                    💡 The URL should start with "https://script.google.com/macros/s/"
-                </Text>
-            </View>
-
-            {/* Action Buttons */}
-            <View style={styles.buttonContainer}>
-                <TouchableOpacity
-                    style={styles.setupButton}
-                    onPress={() => navigation.navigate('SetupGuide')}
-                >
-                    <Text style={styles.setupButtonIcon}>📖</Text>
-                    <Text style={styles.setupButtonText}>View Detailed Setup Guide</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={styles.saveButton}
-                    onPress={handleSave}
-                >
-                    <Text style={styles.saveButtonText}>💾 Save Configuration</Text>
-                </TouchableOpacity>
-            </View>
 
             {/* Security Note */}
             <View style={styles.securityNote}>
                 <Text style={styles.securityIcon}>🔒</Text>
                 <Text style={styles.securityText}>
-                    Your passwords are encrypted with AES-256 before syncing. Only you can decrypt them.
+                    Your passwords are encrypted with AES-256. Only you can decrypt them.
                 </Text>
             </View>
-
-            {/* View Master Password Section */}
-            {isMasterPasswordRequired() && (
-                <View style={styles.masterPasswordSection}>
-                    <Text style={styles.masterPasswordTitle}>🔑 Master Password</Text>
-                    <Text style={styles.masterPasswordDescription}>
-                        Need to switch devices? View your master password to set up the app on a new device.
-                    </Text>
-                    <TouchableOpacity
-                        style={styles.viewMasterPasswordButton}
-                        onPress={handleViewMasterPassword}
-                    >
-                        <Text style={styles.viewMasterPasswordButtonText}>👁️ View Master Password</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
 
             {/* PIN Verification Modal */}
             <Modal
@@ -342,210 +361,116 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#f8f9fa',
     },
-    headerSection: {
-        backgroundColor: '#fff',
-        padding: 24,
-        alignItems: 'center',
-        borderBottomWidth: 1,
-        borderBottomColor: '#e9ecef',
+    section: {
+        margin: 16,
     },
-    headerIcon: {
-        fontSize: 48,
-        marginBottom: 12,
-    },
-    headerTitle: {
-        fontSize: 22,
+    sectionTitle: {
+        fontSize: 20,
         fontWeight: 'bold',
         color: '#212529',
-        marginBottom: 8,
+        marginBottom: 12,
     },
-    headerSubtitle: {
-        fontSize: 14,
-        color: '#6c757d',
-        textAlign: 'center',
-        lineHeight: 20,
-    },
-    dataLossWarningCard: {
-        backgroundColor: '#ff8787',
-        margin: 16,
-        padding: 18,
+    card: {
+        backgroundColor: '#fff',
+        padding: 20,
         borderRadius: 12,
-        borderLeftWidth: 5,
-        borderLeftColor: '#fa5252',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 3,
     },
-    warningCardIcon: {
-        fontSize: 32,
-        marginBottom: 10,
-        textAlign: 'center',
-    },
-    warningCardTitle: {
+    cardTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#fff',
-        marginBottom: 12,
-        textAlign: 'center',
-        letterSpacing: 0.5,
-    },
-    warningCardText: {
-        fontSize: 14,
-        color: '#fff',
-        lineHeight: 20,
-        marginBottom: 8,
-    },
-    warningList: {
-        marginLeft: 12,
-        marginBottom: 12,
-    },
-    warningListItem: {
-        fontSize: 14,
-        color: '#fff',
-        lineHeight: 22,
-        marginBottom: 4,
-    },
-    warningCardEmphasis: {
-        fontSize: 15,
-        fontWeight: 'bold',
-        color: '#fff',
-        textAlign: 'center',
-        marginBottom: 12,
-        letterSpacing: 0.5,
-    },
-    warningCardAction: {
-        fontSize: 13,
-        color: '#fff',
-        textAlign: 'center',
-        fontStyle: 'italic',
-    },
-    infoCard: {
-        backgroundColor: '#e7f5ff',
-        margin: 16,
-        padding: 16,
-        borderRadius: 12,
-        borderLeftWidth: 4,
-        borderLeftColor: '#1971c2',
-    },
-    infoIcon: {
-        fontSize: 24,
-        marginBottom: 8,
-    },
-    infoTitle: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#1971c2',
-        marginBottom: 8,
-    },
-    infoText: {
-        fontSize: 14,
-        color: '#495057',
-        lineHeight: 20,
-    },
-    stepsCard: {
-        backgroundColor: '#fff',
-        margin: 16,
-        marginTop: 0,
-        padding: 16,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#dee2e6',
-    },
-    stepsTitle: {
-        fontSize: 16,
-        fontWeight: 'bold',
         color: '#212529',
+        marginBottom: 8,
+    },
+    cardDescription: {
+        fontSize: 14,
+        color: '#6c757d',
+        lineHeight: 20,
+        marginBottom: 16,
+    },
+    syncStatus: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
         marginBottom: 12,
     },
-    step: {
-        flexDirection: 'row',
+    syncStatusLabel: {
+        fontSize: 14,
+        color: '#6c757d',
+    },
+    syncStatusValue: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#212529',
+    },
+    primaryButton: {
+        backgroundColor: '#007AFF',
+        padding: 14,
+        borderRadius: 10,
         alignItems: 'center',
         marginBottom: 8,
     },
-    stepNumber: {
+    primaryButtonText: {
+        color: '#fff',
         fontSize: 16,
         fontWeight: 'bold',
-        color: '#007AFF',
-        width: 24,
     },
-    stepText: {
-        fontSize: 14,
-        color: '#495057',
-        flex: 1,
-    },
-    inputSection: {
+    secondaryButton: {
         backgroundColor: '#fff',
-        margin: 16,
-        marginTop: 0,
-        padding: 16,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#dee2e6',
-    },
-    label: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#495057',
-        marginBottom: 8,
-    },
-    input: {
-        borderWidth: 1,
-        borderColor: '#ced4da',
-        padding: 12,
-        fontSize: 14,
-        borderRadius: 8,
-        backgroundColor: '#f8f9fa',
-        minHeight: 80,
-        textAlignVertical: 'top',
-    },
-    hint: {
-        color: '#6c757d',
-        fontSize: 12,
-        marginTop: 8,
-        fontStyle: 'italic',
-    },
-    buttonContainer: {
-        margin: 16,
-        marginTop: 0,
-    },
-    setupButton: {
-        backgroundColor: '#fff',
-        padding: 16,
-        borderRadius: 12,
+        padding: 14,
+        borderRadius: 10,
+        alignItems: 'center',
         borderWidth: 2,
         borderColor: '#007AFF',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 12,
+        marginBottom: 8,
     },
-    setupButtonIcon: {
-        fontSize: 20,
-        marginRight: 8,
-    },
-    setupButtonText: {
+    secondaryButtonText: {
         color: '#007AFF',
         fontSize: 16,
         fontWeight: '600',
     },
-    saveButton: {
-        backgroundColor: '#007AFF',
-        padding: 16,
-        borderRadius: 12,
+    dangerButton: {
+        backgroundColor: '#fff',
+        padding: 14,
+        borderRadius: 10,
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#dc3545',
+        marginBottom: 8,
     },
-    saveButtonText: {
-        color: '#fff',
+    dangerButtonText: {
+        color: '#dc3545',
         fontSize: 16,
-        fontWeight: 'bold',
+        fontWeight: '600',
+    },
+    testButton: {
+        backgroundColor: '#fff',
+        padding: 14,
+        borderRadius: 10,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#6c757d',
+    },
+    testButtonText: {
+        color: '#6c757d',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    buttonDisabled: {
+        opacity: 0.5,
+    },
+    hint: {
+        fontSize: 12,
+        color: '#6c757d',
+        fontStyle: 'italic',
+        textAlign: 'center',
     },
     securityNote: {
         backgroundColor: '#d3f9d8',
         margin: 16,
-        marginTop: 0,
-        marginBottom: 32,
         padding: 16,
         borderRadius: 12,
         flexDirection: 'row',
@@ -560,39 +485,6 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#2b8a3e',
         lineHeight: 18,
-    },
-    masterPasswordSection: {
-        backgroundColor: '#fff3cd',
-        margin: 16,
-        marginTop: 0,
-        marginBottom: 32,
-        padding: 18,
-        borderRadius: 12,
-        borderLeftWidth: 4,
-        borderLeftColor: '#ffc107',
-    },
-    masterPasswordTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#856404',
-        marginBottom: 8,
-    },
-    masterPasswordDescription: {
-        fontSize: 14,
-        color: '#856404',
-        lineHeight: 20,
-        marginBottom: 16,
-    },
-    viewMasterPasswordButton: {
-        backgroundColor: '#ffc107',
-        padding: 14,
-        borderRadius: 10,
-        alignItems: 'center',
-    },
-    viewMasterPasswordButtonText: {
-        color: '#000',
-        fontSize: 16,
-        fontWeight: 'bold',
     },
     modalOverlay: {
         flex: 1,
