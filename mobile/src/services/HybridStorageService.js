@@ -193,21 +193,8 @@ export const syncBidirectional = async () => {
 
         // Step 2: Process cloud passwords (O(n) instead of O(n²))
         for (const cloudPwd of cloudPasswords) {
-            // Try to match by localId first
-            let localPwd = localMap.get(cloudPwd.localId);
-
-            // Fallback: Match by siteName + username if localId match fails
-            if (!localPwd) {
-                localPwd = localPasswords.find(p =>
-                    p.siteName === cloudPwd.siteName &&
-                    p.username === cloudPwd.username
-                );
-
-                // If we found a match by content, update the map to prevent duplicates
-                if (localPwd) {
-                    console.log(`🔗 Linked legacy cloud item "${cloudPwd.siteName}" to local item`);
-                }
-            }
+            // Match by localId only
+            const localPwd = localMap.get(cloudPwd.localId);
 
             if (!localPwd) {
                 // Case B: Only in cloud → Download to local
@@ -438,22 +425,8 @@ const getFirestoreIdForLocalId = async (userId, localId) => {
     try {
         const result = await FirestoreService.getPasswords(userId);
         if (result.success) {
-            // Try to find by localId first
-            let match = result.passwords.find(p => p.localId === localId);
-
-            // Fallback: Try to find by content if we have the local item
-            if (!match) {
-                const localPasswords = Database.getPasswords();
-                const localItem = localPasswords.find(p => p.id === localId);
-
-                if (localItem) {
-                    match = result.passwords.find(p =>
-                        p.siteName === localItem.siteName &&
-                        p.username === localItem.username
-                    );
-                }
-            }
-
+            // Match by localId only
+            const match = result.passwords.find(p => p.localId === localId);
             return match?.id;
         }
         return null;
