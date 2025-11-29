@@ -61,8 +61,12 @@ export const savePassword = async (userId, passwordData) => {
 export const getPasswords = async (userId) => {
     try {
         const passwordsRef = collection(firestore, 'users', userId, 'passwords');
+        console.log(`🔍 Fetching passwords from: users/${userId}/passwords`);
+
         const q = query(passwordsRef, orderBy('createdAt', 'desc'));
         const querySnapshot = await getDocs(q);
+
+        console.log(`📄 Found ${querySnapshot.size} documents in cloud`);
 
         const passwords = [];
         querySnapshot.forEach((doc) => {
@@ -71,7 +75,12 @@ export const getPasswords = async (userId) => {
 
         return { success: true, passwords };
     } catch (error) {
-        console.error('Error getting passwords:', error);
+        console.error('❌ Error getting passwords - Full details:');
+        console.error('Error name:', error.name);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+        console.error('Full error object:', JSON.stringify(error, null, 2));
         return { success: false, error: error.message, passwords: [] };
     }
 };
@@ -94,6 +103,21 @@ export const updatePassword = async (userId, passwordId, passwordData) => {
         return { success: true };
     } catch (error) {
         console.error('Error updating password:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+/**
+ * Link a local ID to a cloud password without updating timestamp
+ * This prevents sync loops when downloading existing passwords
+ */
+export const linkLocalId = async (userId, passwordId, localId) => {
+    try {
+        const passwordRef = doc(firestore, 'users', userId, 'passwords', passwordId);
+        await updateDoc(passwordRef, { localId });
+        return { success: true };
+    } catch (error) {
+        console.error('Error linking local ID:', error);
         return { success: false, error: error.message };
     }
 };

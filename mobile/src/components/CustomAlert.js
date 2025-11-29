@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 
-export default function CustomAlert({ visible, onClose, title, message, type = 'info', buttons = [] }) {
+export default function CustomAlert({ visible, onClose, title, message, type = 'info', buttons = [], textAlign }) {
     // Determine icon and color based on type
     const getTypeConfig = () => {
         switch (type) {
@@ -37,7 +37,11 @@ export default function CustomAlert({ visible, onClose, title, message, type = '
                     <Text style={styles.title}>{title}</Text>
 
                     {/* Message */}
-                    <Text style={styles.message}>{message}</Text>
+                    {typeof message === 'string' ? (
+                        <Text style={[styles.message, { textAlign: textAlign || 'center' }]}>{message}</Text>
+                    ) : (
+                        message
+                    )}
 
                     {/* Buttons */}
                     <View style={styles.buttonContainer}>
@@ -130,12 +134,18 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: 12,
         width: '100%',
+        marginTop: 10, // Added spacing before buttons
     },
     button: {
         flex: 1,
-        paddingVertical: 14,
-        borderRadius: 12,
+        paddingVertical: 16, // Slightly taller button
+        borderRadius: 14, // Softer corners
         alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
     },
     singleButton: {
         flex: 1,

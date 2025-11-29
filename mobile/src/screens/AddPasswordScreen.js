@@ -3,6 +3,9 @@ import { View, TextInput, Text, TouchableOpacity, StyleSheet, Alert, ActivityInd
 import * as HybridStorageService from '../services/HybridStorageService';
 import { encryptPassword, decryptPassword } from '../services/Encryption';
 import CustomAlert from '../components/CustomAlert';
+import { AppConfig } from '../config/AppConfig';
+import Database from '../services/Database';
+import NetInfo from '@react-native-community/netinfo';
 
 export default function AddPasswordScreen({ navigation, route }) {
     const itemToEdit = route.params?.item;
@@ -19,7 +22,9 @@ export default function AddPasswordScreen({ navigation, route }) {
         title: '',
         message: '',
         type: 'info',
-        buttons: []
+        type: 'info',
+        buttons: [],
+        textAlign: 'center'
     });
 
     const usernameRef = useRef(null);
@@ -79,6 +84,10 @@ export default function AddPasswordScreen({ navigation, route }) {
         try {
             const encrypted = await encryptPassword(password);
 
+            // Check connection status
+            const netState = await NetInfo.fetch();
+            const isOffline = !netState.isConnected;
+
             if (isEditMode) {
                 await HybridStorageService.updatePassword(itemToEdit.id, {
                     siteName,
@@ -87,29 +96,58 @@ export default function AddPasswordScreen({ navigation, route }) {
                     comments
                 });
 
-                setAlertConfig({
-                    visible: true,
-                    title: 'Password Updated!',
-                    message: 'Your password has been saved locally and will sync to the cloud if enabled.',
-                    type: 'success',
-                    buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
-                });
+                if (isOffline) {
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Updated Locally',
+                        message: 'Your password has been updated on this device.\n\nChanges will sync to the cloud when you are back online.',
+                        type: 'info',
+                        buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
+                    });
+                } else {
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Password Updated!',
+                        message: 'Your password has been updated and synced to the cloud.',
+                        type: 'success',
+                        buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
+                    });
+                }
                 return;
             } else {
-                await HybridStorageService.savePassword({
+                const result = await HybridStorageService.savePassword({
                     siteName,
                     username,
                     encryptedPassword: encrypted,
                     comments
                 });
 
-                setAlertConfig({
-                    visible: true,
-                    title: 'Password Saved!',
-                    message: 'Your password is securely saved on this device and will sync to the cloud if enabled.',
-                    type: 'success',
-                    buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
-                });
+                if (result.warning) {
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Saved Locally Only',
+                        message: 'Your password has been saved securely on this device.\n\nHowever, it could not be synced to the cloud because you have reached your storage limit.\n\nTo enable cloud sync, please delete some passwords or upgrade your plan.',
+                        type: 'warning',
+                        buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }],
+                        textAlign: 'left'
+                    });
+                } else if (isOffline) {
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Saved Locally',
+                        message: 'Your password has been saved securely on this device.\n\nSync will occur automatically when you are back online.',
+                        type: 'info',
+                        buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
+                    });
+                } else {
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Password Saved!',
+                        message: 'Your password has been saved securely on this device and synced to the cloud.',
+                        type: 'success',
+                        buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
+                    });
+                }
                 return;
             }
 
@@ -257,6 +295,7 @@ export default function AddPasswordScreen({ navigation, route }) {
                 message={alertConfig.message}
                 type={alertConfig.type}
                 buttons={alertConfig.buttons}
+                textAlign={alertConfig.textAlign}
                 onClose={() => setAlertConfig({ ...alertConfig, visible: false })}
             />
         </SafeAreaView>

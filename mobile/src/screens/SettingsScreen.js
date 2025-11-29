@@ -6,14 +6,17 @@ import { verifyPIN } from '../services/Encryption';
 import { getMasterPassword } from '../services/Encryption';
 import { isMasterPasswordRequired } from '../config/EncryptionConfig';
 import { getCurrentUser, signOut } from '../services/FirebaseAuthService';
-import { syncToCloud, getLastSyncTime } from '../services/HybridStorageService';
+import { syncToCloud, getLastSyncTime, getCloudPasswordLimit } from '../services/HybridStorageService';
+import { AppConfig } from '../config/AppConfig';
 import { firestore } from '../../firebase.config';
+import CustomAlert from '../components/CustomAlert';
 
 export default function SettingsScreen({ navigation }) {
     const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
     const [userEmail, setUserEmail] = useState('');
     const [lastSyncTime, setLastSyncTime] = useState(null);
     const [syncing, setSyncing] = useState(false);
+    const [cloudLimit, setCloudLimit] = useState(AppConfig.DEFAULT_CLOUD_PASSWORD_LIMIT);
 
     // View Master Password states
     const [showPinModal, setShowPinModal] = useState(false);
@@ -21,6 +24,16 @@ export default function SettingsScreen({ navigation }) {
     const [masterPassword, setMasterPassword] = useState('');
     const [showMasterPassword, setShowMasterPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+
+    // Custom Alert state
+    const [alertConfig, setAlertConfig] = useState({
+        visible: false,
+        title: '',
+        message: '',
+        type: 'info',
+        buttons: [],
+        textAlign: 'center'
+    });
 
     useEffect(() => {
         loadCloudSyncStatus();
@@ -39,10 +52,12 @@ export default function SettingsScreen({ navigation }) {
             const enabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
             const email = await SecureStore.getItemAsync('FIREBASE_USER_EMAIL');
             const lastSync = await getLastSyncTime();
+            const limit = await getCloudPasswordLimit();
 
             setCloudSyncEnabled(enabled === 'true');
             setUserEmail(email || '');
             setLastSyncTime(lastSync);
+            setCloudLimit(limit);
         } catch (error) {
             console.error('Error loading cloud sync status:', error);
         }
@@ -99,12 +114,66 @@ export default function SettingsScreen({ navigation }) {
                     ? `Sync successful!\n\n${details.join('\n')}`
                     : 'Your vault is fully up to date! ✅\n\nNo changes were needed.';
 
-                Alert.alert('Sync Complete', message);
+                setAlertConfig({
+                    visible: true,
+                    title: 'Sync Complete',
+                    message: message,
+                    type: 'success',
+                    buttons: [{ text: 'OK', style: 'default' }],
+                    textAlign: details.length > 0 ? 'left' : 'center'
+                });
+            } else if (result.error === 'LIMIT_REACHED') {
+                const { current, pending, limit, exceeded } = result.limitDetails;
+
+                const LimitMessage = (
+                    <View>
+                        <Text style={{ fontSize: 15, color: '#495057', marginBottom: 12, textAlign: 'center' }}>
+                            Your cloud storage is full (<Text style={{ fontWeight: 'bold', color: '#e03131' }}>{current}/{limit}</Text> passwords).
+                        </Text>
+                        <Text style={{ fontSize: 15, color: '#495057', marginBottom: 20, textAlign: 'center' }}>
+                            Sync is paused for <Text style={{ fontWeight: 'bold' }}>{pending}</Text> new passwords.
+                        </Text>
+
+                        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#212529', marginBottom: 8 }}>
+                            To resume syncing:
+                        </Text>
+                        <View style={{ paddingLeft: 8 }}>
+                            <Text style={{ fontSize: 15, color: '#495057', marginBottom: 6 }}>
+                                • Delete <Text style={{ fontWeight: 'bold' }}>{exceeded}</Text> password{exceeded > 1 ? 's' : ''} from local storage
+                            </Text>
+                            <Text style={{ fontSize: 15, color: '#495057' }}>
+                                • Or upgrade to a higher plan
+                            </Text>
+                        </View>
+                    </View>
+                );
+
+                setAlertConfig({
+                    visible: true,
+                    title: 'Storage Limit Reached',
+                    message: LimitMessage,
+                    type: 'error',
+                    buttons: [{ text: 'OK', style: 'default' }],
+                    textAlign: 'left'
+                });
             } else {
-                Alert.alert('Error', result.error || 'Failed to sync');
+                setAlertConfig({
+                    visible: true,
+                    title: 'Sync Failed',
+                    message: result.error || 'Failed to sync. Please check your internet connection and try again.',
+                    type: 'error',
+                    buttons: [{ text: 'OK', style: 'default' }],
+                    textAlign: result.error && result.error.includes('\n') ? 'left' : 'center'
+                });
             }
         } catch (error) {
-            Alert.alert('Error', 'Failed to sync to cloud');
+            setAlertConfig({
+                visible: true,
+                title: 'Sync Error',
+                message: 'Failed to sync to cloud. Please check your internet connection and try again.',
+                type: 'error',
+                buttons: [{ text: 'OK', style: 'default' }]
+            });
         } finally {
             setSyncing(false);
         }
@@ -205,6 +274,12 @@ export default function SettingsScreen({ navigation }) {
                         <Text style={styles.hint}>
                             💡 Optional - app works offline without cloud sync
                         </Text>
+                        <View style={styles.limitInfoContainer}>
+                            <Text style={styles.limitInfoIcon}>ℹ️</Text>
+                            <Text style={styles.limitInfoText}>
+                                You can have free data storage for <Text style={{ fontWeight: 'bold' }}>{cloudLimit}</Text> passwords. Beyond that, you need a Pro membership.
+                            </Text>
+                        </View>
                     </View>
                 ) : (
                     <View style={styles.card}>
@@ -240,28 +315,37 @@ export default function SettingsScreen({ navigation }) {
                             <Text style={styles.dangerButtonText}>Sign Out</Text>
                         </TouchableOpacity>
 
+                        <View style={styles.limitInfoContainer}>
+                            <Text style={styles.limitInfoIcon}>ℹ️</Text>
+                            <Text style={styles.limitInfoText}>
+                                You can have free data storage for <Text style={{ fontWeight: 'bold' }}>{cloudLimit}</Text> passwords. Beyond that, you need a Pro membership.
+                            </Text>
+                        </View>
+
 
                     </View>
                 )}
             </View>
 
             {/* Master Password Section */}
-            {isMasterPasswordRequired() && (
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>🔑 Master Password</Text>
-                    <View style={styles.card}>
-                        <Text style={styles.cardDescription}>
-                            View your master password to set up the app on a new device.
-                        </Text>
-                        <TouchableOpacity
-                            style={styles.secondaryButton}
-                            onPress={handleViewMasterPassword}
-                        >
-                            <Text style={styles.secondaryButtonText}>👁️ View Master Password</Text>
-                        </TouchableOpacity>
+            {
+                isMasterPasswordRequired() && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>🔑 Master Password</Text>
+                        <View style={styles.card}>
+                            <Text style={styles.cardDescription}>
+                                View your master password to set up the app on a new device.
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.secondaryButton}
+                                onPress={handleViewMasterPassword}
+                            >
+                                <Text style={styles.secondaryButtonText}>👁️ View Master Password</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                </View>
-            )}
+                )
+            }
 
             {/* Security Note */}
             <View style={styles.securityNote}>
@@ -352,7 +436,18 @@ export default function SettingsScreen({ navigation }) {
                     </View>
                 </View>
             </Modal>
-        </ScrollView>
+
+            {/* Custom Alert for Sync Messages */}
+            <CustomAlert
+                visible={alertConfig.visible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                buttons={alertConfig.buttons}
+                textAlign={alertConfig.textAlign}
+                onClose={() => setAlertConfig({ ...alertConfig, visible: false })}
+            />
+        </ScrollView >
     );
 }
 
@@ -605,5 +700,24 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 16,
         fontWeight: '600',
+    },
+    limitInfoContainer: {
+        flexDirection: 'row',
+        backgroundColor: '#e7f5ff',
+        padding: 12,
+        borderRadius: 8,
+        marginTop: 16,
+        alignItems: 'flex-start',
+    },
+    limitInfoIcon: {
+        fontSize: 18,
+        marginRight: 10,
+        marginTop: 2,
+    },
+    limitInfoText: {
+        flex: 1,
+        fontSize: 13,
+        color: '#1971c2',
+        lineHeight: 18,
     },
 });

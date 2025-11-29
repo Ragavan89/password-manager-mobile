@@ -199,6 +199,14 @@ export default function SetupMasterPasswordScreen({ navigation }) {
                         </Text>
                     </View>
 
+                    <View style={styles.warningBox}>
+                        <Text style={styles.warningIcon}>⚠️</Text>
+                        <Text style={styles.warningTitle}>Restoring from Cloud?</Text>
+                        <Text style={styles.warningText}>
+                            If you have existing cloud data, you MUST use the same Master Password to decrypt it. Using a different password will make your cloud data unreadable.
+                        </Text>
+                    </View>
+
                     <View style={styles.form}>
                         <Text style={styles.inputLabel}>Create Master Password</Text>
                         <View style={styles.inputContainer}>

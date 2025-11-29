@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvo
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { signInWithEmail, signUpWithEmail, sendResetEmail } from '../services/FirebaseAuthService';
 import * as SecureStore from 'expo-secure-store';
+import CustomAlert from '../components/CustomAlert';
 
 export default function AuthScreen({ navigation }) {
     const [email, setEmail] = useState('');
@@ -12,6 +13,14 @@ export default function AuthScreen({ navigation }) {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isSignUp, setIsSignUp] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [alertConfig, setAlertConfig] = useState({
+        visible: false,
+        title: '',
+        message: '',
+        type: 'info',
+        buttons: [],
+        textAlign: 'center'
+    });
 
     const validateEmail = (email) => {
         const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -20,7 +29,13 @@ export default function AuthScreen({ navigation }) {
 
     const handleForgotPassword = async () => {
         if (!email) {
-            Alert.alert('Error', 'Please enter your email address first');
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Please enter your email address first',
+                type: 'error',
+                buttons: [{ text: 'OK', style: 'default' }]
+            });
             return;
         }
 
@@ -34,25 +49,56 @@ export default function AuthScreen({ navigation }) {
         setLoading(false);
 
         if (result.success) {
-            Alert.alert('Success', 'Password reset email sent! Check your inbox.');
+            setAlertConfig({
+                visible: true,
+                title: 'Check Your Email',
+                message: 'A password reset link has been sent to your email address.\n\nIf you don\'t see it in your inbox, please check your spam or junk folder.',
+                type: 'success',
+                buttons: [{ text: 'OK', style: 'default' }],
+                textAlign: 'left'
+            });
         } else {
-            Alert.alert('Error', result.error);
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: result.error,
+                type: 'error',
+                buttons: [{ text: 'OK', style: 'default' }]
+            });
         }
     };
 
     const handleAuth = async () => {
         if (!email || !password) {
-            Alert.alert('Error', 'Please enter email and password');
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Please enter email and password',
+                type: 'error',
+                buttons: [{ text: 'OK', style: 'default' }]
+            });
             return;
         }
 
         if (!validateEmail(email)) {
-            Alert.alert('Error', 'Please enter a valid email address');
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Please enter a valid email address',
+                type: 'error',
+                buttons: [{ text: 'OK', style: 'default' }]
+            });
             return;
         }
 
         if (isSignUp && password !== confirmPassword) {
-            Alert.alert('Error', 'Passwords do not match');
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Passwords do not match',
+                type: 'error',
+                buttons: [{ text: 'OK', style: 'default' }]
+            });
             return;
         }
 
@@ -65,7 +111,13 @@ export default function AuthScreen({ navigation }) {
         setLoading(false);
 
         if (!result.success) {
-            Alert.alert('Error', result.error);
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: result.error,
+                type: 'error',
+                buttons: [{ text: 'OK', style: 'default' }]
+            });
         } else {
             // Save user email for cloud sync
             await SecureStore.setItemAsync('FIREBASE_USER_EMAIL', email);
@@ -199,6 +251,17 @@ export default function AuthScreen({ navigation }) {
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
+
+            {/* Custom Alert */}
+            <CustomAlert
+                visible={alertConfig.visible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                buttons={alertConfig.buttons}
+                textAlign={alertConfig.textAlign}
+                onClose={() => setAlertConfig({ ...alertConfig, visible: false })}
+            />
         </SafeAreaView>
     );
 }

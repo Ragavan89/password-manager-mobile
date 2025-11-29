@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Button, ActivityIndicator, RefreshControl, SafeAreaView, Alert, TextInput } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, TextInput, Animated, RefreshControl } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import * as Clipboard from 'expo-clipboard';
 import * as HybridStorageService from '../services/HybridStorageService';
 import { decryptPassword } from '../services/Encryption';
+import * as Clipboard from 'expo-clipboard';
 import { getCurrentUser } from '../services/FirebaseAuthService';
 import * as SecureStore from 'expo-secure-store';
 
@@ -198,9 +199,10 @@ export default function HomeScreen({ navigation }) {
     const renderItem = ({ item }) => {
         const displayPassword = decryptedPasswords[item.id] || '';
         const isExpanded = expandedCards[item.id];
+        const isUnsynced = item.cloudSynced === 0;
 
         return (
-            <View style={styles.card}>
+            <View style={[styles.card, isUnsynced && styles.unsyncedCard]}>
                 <TouchableOpacity
                     style={styles.cardHeader}
                     onPress={() => toggleExpand(item.id)}
@@ -215,6 +217,11 @@ export default function HomeScreen({ navigation }) {
                             <Text style={styles.username}>{item.username}</Text>
                         )}
                     </View>
+                    {isUnsynced && (
+                        <View style={styles.unsyncedBadge}>
+                            <Text style={styles.unsyncedIcon}>☁️❌</Text>
+                        </View>
+                    )}
                     <TouchableOpacity
                         onPress={(e) => {
                             e.stopPropagation();
@@ -353,40 +360,42 @@ export default function HomeScreen({ navigation }) {
                 )}
             </View>
 
-            {loading ? (
-                <View style={styles.center}>
-                    <ActivityIndicator size="large" color="#007AFF" />
-                    <Text style={styles.loadingText}>Syncing with Google Sheets...</Text>
-                </View>
-            ) : (
-                <FlatList
-                    data={filteredPasswords}
-                    keyExtractor={(item) => item.id ? item.id.toString() : Math.random().toString()}
-                    renderItem={renderItem}
-                    contentContainerStyle={styles.listContent}
-                    refreshControl={
-                        <RefreshControl refreshing={loading} onRefresh={loadPasswords} />
-                    }
-                    ListEmptyComponent={
-                        <View style={styles.emptyState}>
-                            {searchQuery.length > 0 ? (
-                                <>
-                                    <Text style={styles.emptyText}>No passwords found</Text>
-                                    <Text style={styles.emptySubText}>Try a different search term</Text>
-                                    <TouchableOpacity onPress={clearSearch} style={styles.clearSearchButton}>
-                                        <Text style={styles.clearSearchButtonText}>Clear Search</Text>
-                                    </TouchableOpacity>
-                                </>
-                            ) : (
-                                <>
-                                    <Text style={styles.emptyText}>No passwords found.</Text>
-                                    <Text style={styles.emptySubText}>Tap "Add New" in the header to add one.</Text>
-                                </>
-                            )}
-                        </View>
-                    }
-                />
-            )}
+            {
+                loading ? (
+                    <View style={styles.center}>
+                        <ActivityIndicator size="large" color="#007AFF" />
+                        <Text style={styles.loadingText}>Syncing with Google Sheets...</Text>
+                    </View>
+                ) : (
+                    <FlatList
+                        data={filteredPasswords}
+                        keyExtractor={(item) => item.id ? item.id.toString() : Math.random().toString()}
+                        renderItem={renderItem}
+                        contentContainerStyle={styles.listContent}
+                        refreshControl={
+                            <RefreshControl refreshing={loading} onRefresh={loadPasswords} />
+                        }
+                        ListEmptyComponent={
+                            <View style={styles.emptyState}>
+                                {searchQuery.length > 0 ? (
+                                    <>
+                                        <Text style={styles.emptyText}>No passwords found</Text>
+                                        <Text style={styles.emptySubText}>Try a different search term</Text>
+                                        <TouchableOpacity onPress={clearSearch} style={styles.clearSearchButton}>
+                                            <Text style={styles.clearSearchButtonText}>Clear Search</Text>
+                                        </TouchableOpacity>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Text style={styles.emptyText}>No passwords found.</Text>
+                                        <Text style={styles.emptySubText}>Tap "Add New" in the header to add one.</Text>
+                                    </>
+                                )}
+                            </View>
+                        }
+                    />
+                )
+            }
 
             <TouchableOpacity
                 style={styles.fab}
@@ -394,7 +403,7 @@ export default function HomeScreen({ navigation }) {
             >
                 <Text style={styles.fabText}>+</Text>
             </TouchableOpacity>
-        </SafeAreaView>
+        </SafeAreaView >
     );
 }
 
@@ -429,6 +438,21 @@ const styles = StyleSheet.create({
         elevation: 3,
         borderWidth: 1,
         borderColor: '#f1f3f5',
+    },
+    unsyncedCard: {
+        backgroundColor: '#fff9db',
+        borderColor: '#ffd43b',
+        borderWidth: 1.5,
+    },
+    unsyncedBadge: {
+        backgroundColor: '#ffe066',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        marginRight: 8,
+    },
+    unsyncedIcon: {
+        fontSize: 14,
     },
     cardHeader: {
         flexDirection: 'row',
@@ -718,5 +742,29 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 14,
         fontWeight: '600',
-    }
+    },
+    usageBanner: {
+        backgroundColor: '#e7f5ff',
+        paddingVertical: 8,
+        paddingHorizontal: 20,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        borderBottomWidth: 1,
+        borderBottomColor: '#d0ebff',
+    },
+    usageBannerWarning: {
+        backgroundColor: '#fff3bf',
+        borderBottomColor: '#ffe066',
+    },
+    usageText: {
+        fontSize: 13,
+        color: '#495057',
+        fontWeight: '500',
+    },
+    usageWarning: {
+        fontSize: 12,
+        color: '#e67700',
+        fontWeight: '600',
+    },
 });

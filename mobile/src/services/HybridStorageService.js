@@ -1,7 +1,58 @@
 import * as Database from './Database';
 import * as FirestoreService from './FirestoreService';
-import { getCurrentUser } from './FirebaseAuthService';
+import { getCurrentUser, signInAnonymouslyUser } from './FirebaseAuthService';
 import * as SecureStore from 'expo-secure-store';
+import { AppConfig } from '../config/AppConfig';
+import { doc, getDoc, getFirestore } from 'firebase/firestore';
+import { app } from '../../firebase.config';
+
+// EXPLICITLY get the named database instance to ensure we aren't using default
+const firestore = getFirestore(app, 'keyvault-pro-india');
+
+/**
+ * Get cloud password limit from Firestore config
+ */
+export const getCloudPasswordLimit = async () => {
+    try {
+        const configRef = doc(firestore, AppConfig.CONFIG_COLLECTION, AppConfig.CONFIG_DOC_ID);
+        console.log(`🔍 Fetching limit from: ${AppConfig.CONFIG_COLLECTION}/${AppConfig.CONFIG_DOC_ID}`);
+
+        const configSnap = await getDoc(configRef);
+
+        if (configSnap.exists()) {
+            const data = configSnap.data();
+            console.log('✅ Cloud limit fetched successfully:', data);
+            const limit = data.maxCloudPasswords || AppConfig.DEFAULT_CLOUD_PASSWORD_LIMIT;
+
+            // Cache the limit for offline use
+            await SecureStore.setItemAsync('CLOUD_PASSWORD_LIMIT', String(limit));
+            return limit;
+        }
+
+        console.log('⚠️ Config document does not exist at path:', configRef.path);
+    } catch (error) {
+        console.log('❌ Error fetching cloud limit:', error);
+        if (error.code === 'permission-denied') {
+            console.log('🛑 Permission denied. Check Firestore Security Rules.');
+            console.log('💡 Ensure rules allow read access to "config/limits" for request.auth != null');
+        }
+        console.log('❌ Error details:', error.code, error.message);
+    }
+
+    // Fallback to cached value if available
+    try {
+        const cachedLimit = await SecureStore.getItemAsync('CLOUD_PASSWORD_LIMIT');
+        if (cachedLimit) {
+            console.log('📱 Using cached cloud limit:', cachedLimit);
+            return parseInt(cachedLimit, 10);
+        }
+    } catch (cacheError) {
+        console.error('Error reading cached limit:', cacheError);
+    }
+
+    // Final fallback
+    return AppConfig.DEFAULT_CLOUD_PASSWORD_LIMIT;
+};
 
 /**
  * Check if cloud sync is enabled
@@ -27,12 +78,31 @@ export const savePassword = async (passwordData) => {
         const encryptedPassword = passwordData.encryptedPassword || '';
         const comments = passwordData.comments || '';
 
-        // Always save to local database first
-        const { id, lastModified } = Database.addPassword(siteName, username, encryptedPassword, comments);
-
-        // If cloud sync is enabled, also save to Firestore
+        // If cloud sync is enabled, check limit before saving
         const cloudEnabled = await isCloudSyncEnabled();
+        let cloudUploadSkipped = false;
+        let cloudSynced = 1; // Default: synced
+
         if (cloudEnabled) {
+            const user = getCurrentUser();
+
+            // Check limit before uploading
+            const cloudLimit = await getCloudPasswordLimit();
+            const cloudResult = await FirestoreService.getPasswords(user.uid);
+            const currentCloudCount = cloudResult.success ? (cloudResult.passwords || []).length : 0;
+
+            if (currentCloudCount >= cloudLimit) {
+                console.log(`⚠️ Cloud limit reached (${currentCloudCount}/${cloudLimit}). Saving locally only.`);
+                cloudUploadSkipped = true;
+                cloudSynced = 0; // Mark as not synced
+            }
+        }
+
+        // Always save to local database first (with sync status)
+        const { id, lastModified } = Database.addPassword(siteName, username, encryptedPassword, comments, cloudSynced);
+
+        // Upload to cloud if enabled and limit not reached
+        if (cloudEnabled && !cloudUploadSkipped) {
             const user = getCurrentUser();
             await FirestoreService.savePassword(user.uid, {
                 ...passwordData,
@@ -44,7 +114,11 @@ export const savePassword = async (passwordData) => {
             await SecureStore.setItemAsync('LAST_SYNC_TIME', new Date().toISOString());
         }
 
-        return { success: true, id };
+        return {
+            success: true,
+            id,
+            warning: cloudUploadSkipped ? 'Cloud limit reached. Password saved locally only.' : null
+        };
     } catch (error) {
         console.error('Error in savePassword:', error);
         return { success: false, error: error.message };
@@ -234,16 +308,41 @@ export const syncBidirectional = async () => {
         console.log(`🔄 To update local: ${toUpdateLocal.length}`);
         console.log(`🔄 To update cloud: ${toUpdateCloud.length}`);
 
+        // Check cloud password limit before uploading
+        const cloudLimit = await getCloudPasswordLimit();
+        const currentCloudCount = cloudPasswords.length;
+        const newCloudCount = currentCloudCount + toUpload.length;
+
+        if (newCloudCount > cloudLimit) {
+            const exceeded = newCloudCount - cloudLimit;
+            return {
+                success: false,
+                error: 'LIMIT_REACHED',
+                limitDetails: {
+                    current: currentCloudCount,
+                    pending: toUpload.length,
+                    limit: cloudLimit,
+                    exceeded: newCloudCount - cloudLimit
+                }
+            };
+        }
         // OPTIMIZATION 2: Execute local operations synchronously (fast)
         // Download new passwords
         for (const cloudPwd of toDownload) {
             try {
-                Database.addPassword(
+                const { id } = Database.addPassword(
                     cloudPwd.siteName || 'Untitled',
                     cloudPwd.username || '',
                     cloudPwd.encryptedPassword || '',
-                    cloudPwd.comments || ''
+                    cloudPwd.comments || '',
+                    1 // Mark as synced
                 );
+
+                // FIX: Link the new local ID to the cloud password
+                // This prevents future syncs from treating this as a new upload
+                if (cloudPwd.id) {
+                    await FirestoreService.linkLocalId(user.uid, cloudPwd.id, id);
+                }
             } catch (err) {
                 console.error(`❌ Error downloading ${cloudPwd.siteName}:`, err);
             }
