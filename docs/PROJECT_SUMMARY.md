@@ -230,3 +230,20 @@ This was a navigation issue that's now fixed.
 
 ## Last Updated
 2025-11-25
+## Recent Fixes & Improvements (Nov 2025)
+
+### 🐛 Bug Fixes
+1.  **Duplicate Uploads**: Fixed issue where passwords created offline were duplicated in cloud.
+    -   Added check for existing `localId` before upload.
+    -   Implemented "Unsynced by default" logic to prevent race conditions.
+2.  **Storage Limit Calculation**: Fixed "Limit Reached" error when duplicates existed.
+    -   Now counts unique passwords by `localId` instead of total rows.
+3.  **Success Messages**: Fixed misleading "Synced to cloud" message when offline.
+    -   Now explicitly checks upload status before showing success message.
+4.  **Offline Highlights**: Fixed issue where offline entries lost yellow highlight after logout.
+    -   Changed default `cloudSynced` status to `0` (Unsynced).
+    -   Ensured items remain yellow until confirmed upload.
+
+### 🧹 Code Cleanup
+-   Consolidated documentation into core files.
+-   Removed redundant summary files.

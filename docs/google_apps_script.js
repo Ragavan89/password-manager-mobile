@@ -1,16 +1,6 @@
 // -----------------------------------------------------------------------------
 // COPY THIS CODE INTO A NEW GOOGLE APPS SCRIPT PROJECT
 // -----------------------------------------------------------------------------
-// 1. Create a new Google Sheet.
-// 2. Go to Extensions > Apps Script.
-// 3. Paste this code into Code.gs.
-// 4. Click "Deploy" > "New deployment".
-// 5. Select type: "Web app".
-// 6. Description: "Password Manager API".
-// 7. Execute as: "Me".
-// 8. Who has access: "Anyone". (Important for the app to access it without OAuth flow)
-// 9. Click "Deploy" and copy the "Web App URL".
-// -----------------------------------------------------------------------------
 
 function doPost(e) {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
