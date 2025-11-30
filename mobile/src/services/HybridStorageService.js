@@ -81,7 +81,7 @@ export const savePassword = async (passwordData) => {
         // If cloud sync is enabled, check limit before saving
         const cloudEnabled = await isCloudSyncEnabled();
         let cloudUploadSkipped = false;
-        let cloudSynced = 1; // Default: synced
+        let cloudSynced = 0; // Default: NOT synced (Yellow) - Safer default
 
         if (cloudEnabled) {
             const user = getCurrentUser();
@@ -94,12 +94,14 @@ export const savePassword = async (passwordData) => {
             if (currentCloudCount >= cloudLimit) {
                 console.log(`⚠️ Cloud limit reached (${currentCloudCount}/${cloudLimit}). Saving locally only.`);
                 cloudUploadSkipped = true;
-                cloudSynced = 0; // Mark as not synced
+                // cloudSynced is already 0
             }
         }
 
         // Always save to local database first (with sync status)
         const { id, lastModified } = Database.addPassword(siteName, username, encryptedPassword, comments, cloudSynced);
+
+        let uploadedToCloud = false;
 
         // Upload to cloud if enabled and limit not reached
         if (cloudEnabled && !cloudUploadSkipped) {
@@ -110,14 +112,19 @@ export const savePassword = async (passwordData) => {
                 localId: id // Store local ID for reference
             });
 
+            // Mark as synced in local DB
+            Database.updateCloudSyncStatus(id, 1);
+
             // Update last sync time
             await SecureStore.setItemAsync('LAST_SYNC_TIME', new Date().toISOString());
+            uploadedToCloud = true;
         }
 
         return {
             success: true,
             id,
-            warning: cloudUploadSkipped ? 'Cloud limit reached. Password saved locally only.' : null
+            warning: cloudUploadSkipped ? 'Cloud limit reached. Password saved locally only.' : null,
+            synced: uploadedToCloud
         };
     } catch (error) {
         console.error('Error in savePassword:', error);
@@ -161,6 +168,8 @@ export const updatePassword = async (id, passwordData) => {
         // Always update local database
         const { lastModified } = Database.updatePassword(id, siteName, username, encryptedPassword, comments);
 
+        let uploadedToCloud = false;
+
         // If cloud sync is enabled, also update in Firestore
         const cloudEnabled = await isCloudSyncEnabled();
         if (cloudEnabled) {
@@ -172,13 +181,22 @@ export const updatePassword = async (id, passwordData) => {
                     ...passwordData,
                     lastModified // Use the exact timestamp from local DB
                 });
+                uploadedToCloud = true;
+
+                // Ensure it's marked as synced
+                Database.updateCloudSyncStatus(id, 1);
             }
 
             // Update last sync time
             await SecureStore.setItemAsync('LAST_SYNC_TIME', new Date().toISOString());
         }
 
-        return { success: true };
+        if (!uploadedToCloud) {
+            // Mark as unsynced (Yellow) because we changed it locally but not in cloud
+            Database.updateCloudSyncStatus(id, 0);
+        }
+
+        return { success: true, synced: uploadedToCloud };
     } catch (error) {
         console.error('Error in updatePassword:', error);
         return { success: false, error: error.message };

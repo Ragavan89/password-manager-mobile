@@ -89,27 +89,27 @@ export default function AddPasswordScreen({ navigation, route }) {
             const isOffline = !netState.isConnected;
 
             if (isEditMode) {
-                await HybridStorageService.updatePassword(itemToEdit.id, {
+                const result = await HybridStorageService.updatePassword(itemToEdit.id, {
                     siteName,
                     username,
                     encryptedPassword: encrypted,
                     comments
                 });
 
-                if (isOffline) {
-                    setAlertConfig({
-                        visible: true,
-                        title: 'Updated Locally',
-                        message: 'Your password has been updated on this device.\n\nChanges will sync to the cloud when you are back online.',
-                        type: 'info',
-                        buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
-                    });
-                } else {
+                if (result.synced) {
                     setAlertConfig({
                         visible: true,
                         title: 'Password Updated!',
                         message: 'Your password has been updated and synced to the cloud.',
                         type: 'success',
+                        buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
+                    });
+                } else {
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Updated Locally',
+                        message: 'Your password has been updated on this device.\n\nIt is currently stored offline and will be synced when connection is available.',
+                        type: 'info',
                         buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
                     });
                 }
@@ -131,20 +131,20 @@ export default function AddPasswordScreen({ navigation, route }) {
                         buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }],
                         textAlign: 'left'
                     });
-                } else if (isOffline) {
-                    setAlertConfig({
-                        visible: true,
-                        title: 'Saved Locally',
-                        message: 'Your password has been saved securely on this device.\n\nSync will occur automatically when you are back online.',
-                        type: 'info',
-                        buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
-                    });
-                } else {
+                } else if (result.synced) {
                     setAlertConfig({
                         visible: true,
                         title: 'Password Saved!',
                         message: 'Your password has been saved securely on this device and synced to the cloud.',
                         type: 'success',
+                        buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
+                    });
+                } else {
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Saved Locally',
+                        message: 'Your password has been saved securely on this device.\n\nIt is currently stored offline and will be synced when connection is available.',
+                        type: 'info',
                         buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
                     });
                 }
