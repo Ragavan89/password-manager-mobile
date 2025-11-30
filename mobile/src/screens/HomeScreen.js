@@ -143,6 +143,14 @@ export default function HomeScreen({ navigation }) {
 
     const handleDelete = async (id) => {
         await HybridStorageService.deletePassword(id);
+
+        // If cloud sync is enabled, trigger a sync to upload any pending entries
+        if (cloudSyncEnabled) {
+            HybridStorageService.syncToCloud().catch(err =>
+                console.error('Background sync after delete failed:', err)
+            );
+        }
+
         loadPasswords();
     };
 

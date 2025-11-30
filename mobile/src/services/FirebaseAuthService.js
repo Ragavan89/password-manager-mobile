@@ -3,7 +3,8 @@ import {
     signInWithEmailAndPassword,
     signOut as firebaseSignOut,
     onAuthStateChanged,
-    sendPasswordResetEmail
+    sendPasswordResetEmail,
+    signInAnonymously
 } from 'firebase/auth';
 import { auth } from '../../firebase.config';
 
@@ -30,6 +31,19 @@ export const signUpWithEmail = async (email, password) => {
         }
 
         return { success: false, error: errorMessage };
+    }
+};
+
+/**
+ * Sign in anonymously
+ */
+export const signInAnonymouslyUser = async () => {
+    try {
+        const userCredential = await signInAnonymously(auth);
+        return { success: true, user: userCredential.user };
+    } catch (error) {
+        console.log('Anonymous sign in error:', error);
+        return { success: false, error: error.message };
     }
 };
 

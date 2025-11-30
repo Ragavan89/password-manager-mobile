@@ -18,9 +18,16 @@ const firestore = getFirestore(app, 'keyvault-pro-india');
 
 /**
  * Save a password to Firestore
+ * CRITICAL: Uses localId as document ID to enforce uniqueness
  */
 export const savePassword = async (userId, passwordData) => {
     try {
+        // Validate that localId exists
+        if (!passwordData.localId) {
+            console.error('❌ savePassword called without localId:', passwordData);
+            return { success: false, error: 'localId is required' };
+        }
+
         // First, ensure the user document exists
         const userRef = doc(firestore, 'users', userId);
 
@@ -33,22 +40,24 @@ export const savePassword = async (userId, passwordData) => {
             throw userDocError;
         }
 
-        // Then create the password in the subcollection
-        const passwordsCollectionRef = collection(userRef, 'passwords');
-        const newPasswordRef = doc(passwordsCollectionRef);
+        // CRITICAL FIX: Use localId as document ID to enforce uniqueness
+        // Format: local_{localId} (e.g., local_12)
+        const documentId = `local_${passwordData.localId}`;
+        const passwordRef = doc(firestore, 'users', userId, 'passwords', documentId);
 
         try {
-            await setDoc(newPasswordRef, {
+            await setDoc(passwordRef, {
                 ...passwordData,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             });
+
+            console.log(`✅ Saved password with localId ${passwordData.localId} → Firestore ID: ${documentId}`);
+            return { success: true, id: documentId };
         } catch (passwordDocError) {
             console.error('❌ Failed to create password document:', passwordDocError);
             throw passwordDocError;
         }
-
-        return { success: true, id: newPasswordRef.id };
     } catch (error) {
         console.error('❌ Error saving password:', error);
         return { success: false, error: error.message };

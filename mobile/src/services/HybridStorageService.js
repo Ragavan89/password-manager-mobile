@@ -245,6 +245,18 @@ export const syncBidirectional = async () => {
 
         // Step 1: Fetch both datasets
         const localPasswords = Database.getPasswords();
+
+        // DEBUG: Log local passwords with their IDs
+        console.log('🔍 DEBUG: Local passwords fetched:', localPasswords.length);
+        const localIdCounts = {};
+        localPasswords.forEach(pwd => {
+            localIdCounts[pwd.id] = (localIdCounts[pwd.id] || 0) + 1;
+        });
+        const duplicateLocalIds = Object.entries(localIdCounts).filter(([id, count]) => count > 1);
+        if (duplicateLocalIds.length > 0) {
+            console.error('🚨 DUPLICATE LOCAL IDs DETECTED:', duplicateLocalIds);
+        }
+
         const cloudResult = await FirestoreService.getPasswords(user.uid);
 
         if (!cloudResult.success) {
@@ -264,6 +276,9 @@ export const syncBidirectional = async () => {
         const toDownload = [];
         const toUpdateCloud = [];
         const toUpdateLocal = [];
+
+        // CRITICAL FIX: Track which localIds we're uploading to prevent duplicates
+        const uploadingLocalIds = new Set();
 
         // Step 2: Process cloud passwords (O(n) instead of O(n²))
         for (const cloudPwd of cloudPasswords) {
@@ -298,7 +313,13 @@ export const syncBidirectional = async () => {
         for (const localPwd of localPasswords) {
             if (!cloudMap.has(localPwd.id)) {
                 // Case D: Only in local → Upload to cloud
-                toUpload.push(localPwd);
+                // CRITICAL FIX: Check if we're already uploading this localId
+                if (!uploadingLocalIds.has(localPwd.id)) {
+                    toUpload.push(localPwd);
+                    uploadingLocalIds.add(localPwd.id);
+                } else {
+                    console.warn(`⚠️ Duplicate upload prevented for ${localPwd.siteName} (localId: ${localPwd.id})`);
+                }
             }
             // If exists in both, already handled in Step 2
         }
@@ -307,6 +328,21 @@ export const syncBidirectional = async () => {
         console.log(`📥 To download: ${toDownload.length}`);
         console.log(`🔄 To update local: ${toUpdateLocal.length}`);
         console.log(`🔄 To update cloud: ${toUpdateCloud.length}`);
+
+        // DEBUG: Log toUpload array contents
+        if (toUpload.length > 0) {
+            console.log('🔍 DEBUG: Passwords to upload:');
+            toUpload.forEach((pwd, index) => {
+                console.log(`  [${index}] localId: ${pwd.id}, siteName: ${pwd.siteName}, cloudSynced: ${pwd.cloudSynced}`);
+            });
+
+            // Check for duplicates in toUpload array
+            const uploadLocalIds = toUpload.map(p => p.id);
+            const uploadDuplicates = uploadLocalIds.filter((id, index) => uploadLocalIds.indexOf(id) !== index);
+            if (uploadDuplicates.length > 0) {
+                console.error('🚨 DUPLICATES IN UPLOAD QUEUE:', uploadDuplicates);
+            }
+        }
 
         // Check cloud password limit before uploading
         const cloudLimit = await getCloudPasswordLimit();
@@ -372,25 +408,35 @@ export const syncBidirectional = async () => {
         // Upload new passwords in batches
         for (let i = 0; i < toUpload.length; i += BATCH_SIZE) {
             const batch = toUpload.slice(i, i + BATCH_SIZE);
+
+            // DEBUG: Log batch upload details
+            console.log(`🔍 DEBUG: Uploading batch ${Math.floor(i / BATCH_SIZE) + 1}, size: ${batch.length}`);
+            batch.forEach((pwd, idx) => {
+                console.log(`  Batch[${idx}] localId: ${pwd.id}, siteName: ${pwd.siteName}`);
+            });
+
             const results = await Promise.allSettled(
-                batch.map(pwd =>
-                    FirestoreService.savePassword(user.uid, {
+                batch.map((pwd, batchIndex) => {
+                    console.log(`📤 Uploading: ${pwd.siteName} (localId: ${pwd.id})`);
+                    return FirestoreService.savePassword(user.uid, {
                         siteName: pwd.siteName,
                         username: pwd.username,
                         encryptedPassword: pwd.encryptedPassword,
                         comments: pwd.comments,
                         lastModified: pwd.lastModified,
                         localId: pwd.id
-                    })
-                )
+                    });
+                })
             );
 
             results.forEach((result, index) => {
                 if (result.status === 'fulfilled' && result.value.success) {
                     uploadedCount++;
+                    console.log(`✅ Uploaded: ${batch[index].siteName} (localId: ${batch[index].id}) → Firestore ID: ${result.value.id}`);
                 } else {
                     errorCount++;
-                    console.error(`❌ Failed to upload ${batch[index].siteName}`);
+                    const errorMsg = result.status === 'rejected' ? result.reason : result.value.error;
+                    console.error(`❌ Failed to upload ${batch[index].siteName} (localId: ${batch[index].id}):`, errorMsg);
                 }
             });
         }
