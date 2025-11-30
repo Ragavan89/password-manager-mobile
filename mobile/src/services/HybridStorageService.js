@@ -433,6 +433,9 @@ export const syncBidirectional = async () => {
                 if (result.status === 'fulfilled' && result.value.success) {
                     uploadedCount++;
                     console.log(`✅ Uploaded: ${batch[index].siteName} (localId: ${batch[index].id}) → Firestore ID: ${result.value.id}`);
+
+                    // CRITICAL FIX: Update local sync status so yellow highlight disappears
+                    Database.updateCloudSyncStatus(batch[index].id, 1);
                 } else {
                     errorCount++;
                     const errorMsg = result.status === 'rejected' ? result.reason : result.value.error;
