@@ -169,13 +169,14 @@ export const updatePassword = async (id, passwordData) => {
         const { lastModified } = Database.updatePassword(id, siteName, username, encryptedPassword, comments);
 
         let uploadedToCloud = false;
+        let limitReached = false;
 
         // If cloud sync is enabled, also update in Firestore
         const cloudEnabled = await isCloudSyncEnabled();
         if (cloudEnabled) {
             const user = getCurrentUser();
 
-            // Try to update, but if document doesn't exist, create it (upsert behavior)
+            // Try to update, but if document doesn't exist, create it (up sert behavior)
             const updateResult = await FirestoreService.updatePassword(user.uid, id, {
                 ...passwordData,
                 lastModified // Use the exact timestamp from local DB
@@ -192,6 +193,7 @@ export const updatePassword = async (id, passwordData) => {
                     console.log(`⚠️ Cannot create document - limit reached (${currentCloudCount}/${cloudLimit})`);
                     // Don't upload, keep as unsynced
                     uploadedToCloud = false;
+                    limitReached = true;
                 } else {
                     console.log(`⚠️ Document doesn't exist, creating it (${currentCloudCount + 1}/${cloudLimit})`);
                     await FirestoreService.savePassword(user.uid, {
@@ -219,12 +221,13 @@ export const updatePassword = async (id, passwordData) => {
             Database.updateCloudSyncStatus(id, 0);
         }
 
-        return { success: true, synced: uploadedToCloud };
+        return { success: true, synced: uploadedToCloud, limitReached };
     } catch (error) {
         console.error('Error in updatePassword:', error);
         return { success: false, error: error.message };
     }
 };
+
 
 /**
  * Delete password from local DB and optionally from Firestore
@@ -384,11 +387,27 @@ export const syncBidirectional = async () => {
         // Check cloud password limit before uploading
         const cloudLimit = await getCloudPasswordLimit();
         const currentCloudCount = cloudPasswords.length;
-        const newCloudCount = currentCloudCount + toUpload.length;
+        const availableSpace = cloudLimit - currentCloudCount;
         let uploadSkipped = false;
+        let skippedCount = 0;
 
-        if (newCloudCount > cloudLimit) {
-            console.warn(`Cloud limit reached (${currentCloudCount}/${cloudLimit}). Skipping ${toUpload.length} uploads.`);
+        // Sort toUpload by lastModified (oldest first) to prioritize earlier entries
+        toUpload.sort((a, b) => {
+            const timeA = new Date(a.lastModified || 0).getTime();
+            const timeB = new Date(b.lastModified || 0).getTime();
+            return timeA - timeB;
+        });
+
+        // If we have more entries than available space, only upload what fits
+        if (toUpload.length > availableSpace) {
+            skippedCount = toUpload.length - availableSpace;
+            console.warn(`Cloud limit reached (${currentCloudCount}/${cloudLimit}). Uploading ${availableSpace} of ${toUpload.length} entries. ${skippedCount} will remain unsynced.`);
+            toUpload = toUpload.slice(0, availableSpace);
+            uploadSkipped = skippedCount > 0;
+        } else if (availableSpace <= 0) {
+            // No space available at all
+            skippedCount = toUpload.length;
+            console.warn(`Cloud limit reached (${currentCloudCount}/${cloudLimit}). Skipping all ${toUpload.length} uploads.`);
             toUpload = [];
             uploadSkipped = true;
         }
@@ -511,8 +530,11 @@ export const syncBidirectional = async () => {
             total: totalSynced,
             errors: errorCount,
             limitReached: uploadSkipped,
+            skippedCount: skippedCount || 0,
             message: uploadSkipped
-                ? `Synced ${totalSynced} passwords (Uploads skipped: Limit reached)`
+                ? (skippedCount > 0
+                    ? `Synced ${totalSynced} passwords (${skippedCount} skipped due to limit: ${currentCloudCount + uploadedCount}/${cloudLimit})`
+                    : `Synced ${totalSynced} passwords (Uploads skipped: Limit reached)`)
                 : (errorCount > 0
                     ? `Synced ${totalSynced} passwords with ${errorCount} errors`
                     : `Successfully synced ${totalSynced} passwords`)
