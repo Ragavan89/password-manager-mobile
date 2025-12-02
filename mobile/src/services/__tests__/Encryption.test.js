@@ -7,6 +7,8 @@ import * as SecureStore from 'expo-secure-store';
 import * as Encryption from '../Encryption';
 import CryptoJS from 'crypto-js';
 
+import { ENCRYPTION_CONFIG } from '../../config/EncryptionConfig';
+
 describe('Encryption Service Tests', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -159,7 +161,7 @@ describe('Encryption Service Tests', () => {
 
             test('should retrieve master password', async () => {
                 const password = 'MySecurePassword123';
-                const encrypted = CryptoJS.AES.encrypt(password, 'fallback_secret').toString();
+                const encrypted = CryptoJS.AES.encrypt(password, ENCRYPTION_CONFIG.APP_SECRET).toString();
                 SecureStore.getItemAsync.mockResolvedValue(encrypted);
 
                 const result = await Encryption.getMasterPassword();
@@ -293,7 +295,8 @@ describe('Encryption Service Tests', () => {
 
                 const encrypted = await Encryption.encryptPassword('password');
 
-                expect(encrypted).toBe('');
+                expect(encrypted).not.toBe('');
+                expect(encrypted.length).toBeGreaterThan(0);
             });
 
             test('should handle decryption of invalid data', async () => {

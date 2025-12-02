@@ -290,7 +290,7 @@ export const syncBidirectional = async () => {
         const cloudMap = new Map(cloudPasswords.map(p => [p.localId, p]));
 
         // Collect operations to batch
-        const toUpload = [];
+        let toUpload = [];
         const toDownload = [];
         const toUpdateCloud = [];
         const toUpdateLocal = [];
@@ -366,35 +366,33 @@ export const syncBidirectional = async () => {
         const cloudLimit = await getCloudPasswordLimit();
         const currentCloudCount = cloudPasswords.length;
         const newCloudCount = currentCloudCount + toUpload.length;
+        let uploadSkipped = false;
 
         if (newCloudCount > cloudLimit) {
-            const exceeded = newCloudCount - cloudLimit;
-            return {
-                success: false,
-                error: 'LIMIT_REACHED',
-                limitDetails: {
-                    current: currentCloudCount,
-                    pending: toUpload.length,
-                    limit: cloudLimit,
-                    exceeded: newCloudCount - cloudLimit
-                }
-            };
+            console.warn(`Cloud limit reached (${currentCloudCount}/${cloudLimit}). Skipping ${toUpload.length} uploads.`);
+            toUpload = [];
+            uploadSkipped = true;
         }
         // OPTIMIZATION 2: Execute local operations synchronously (fast)
         // Download new passwords
         for (const cloudPwd of toDownload) {
             try {
+                // Try to reuse the localId from cloud if available to prevent duplicates
+                // and avoid unnecessary cloud updates (which might be blocked by limits)
+                const targetId = cloudPwd.localId || null;
+
                 const { id } = Database.addPassword(
                     cloudPwd.siteName || 'Untitled',
                     cloudPwd.username || '',
                     cloudPwd.encryptedPassword || '',
                     cloudPwd.comments || '',
-                    1 // Mark as synced
+                    1, // Mark as synced
+                    targetId // Pass the ID
                 );
 
                 // FIX: Link the new local ID to the cloud password
-                // This prevents future syncs from treating this as a new upload
-                if (cloudPwd.id) {
+                // Only if we generated a NEW ID (i.e. targetId was null)
+                if (cloudPwd.id && !targetId) {
                     await FirestoreService.linkLocalId(user.uid, cloudPwd.id, id);
                 }
             } catch (err) {
@@ -502,9 +500,12 @@ export const syncBidirectional = async () => {
             updatedCloud: updatedCloudCount,
             total: totalSynced,
             errors: errorCount,
-            message: errorCount > 0
-                ? `Synced ${totalSynced} passwords with ${errorCount} errors`
-                : `Successfully synced ${totalSynced} passwords`
+            limitReached: uploadSkipped,
+            message: uploadSkipped
+                ? `Synced ${totalSynced} passwords (Uploads skipped: Limit reached)`
+                : (errorCount > 0
+                    ? `Synced ${totalSynced} passwords with ${errorCount} errors`
+                    : `Successfully synced ${totalSynced} passwords`)
         };
     } catch (error) {
         console.error('❌ Error in syncBidirectional:', error);

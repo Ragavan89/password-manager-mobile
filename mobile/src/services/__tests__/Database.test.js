@@ -5,31 +5,50 @@
 
 import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
-import * as Database from '../Database';
 
-// Mock Platform
-jest.mock('react-native/Libraries/Utilities/Platform', () => ({
-    OS: 'ios',
-    select: jest.fn((obj) => obj.ios),
+// Define mock functions outside the mock factory to be used? No, jest.mock hoisting prevents this.
+// We will access the mock instance via SQLite.openDatabaseSync.mock.results[0].value
+
+jest.mock('expo-sqlite', () => ({
+    openDatabaseSync: jest.fn(() => ({
+        execSync: jest.fn(),
+        runSync: jest.fn(),
+        getAllSync: jest.fn(),
+    })),
 }));
+
+import * as Database from '../Database';
 
 describe('Database Service - Local Storage Tests', () => {
     let mockDb;
 
+    beforeAll(() => {
+        // Capture the db instance created by Database.js
+        // Database.js calls openDatabaseSync once at import time
+        if (SQLite.openDatabaseSync.mock.results.length > 0) {
+            mockDb = SQLite.openDatabaseSync.mock.results[0].value;
+        } else {
+            // Fallback if not called (e.g. if Platform was web during import, which shouldn't happen here)
+            mockDb = {
+                execSync: jest.fn(),
+                runSync: jest.fn(),
+                getAllSync: jest.fn(),
+            };
+        }
+    });
+
     beforeEach(() => {
         jest.clearAllMocks();
 
-        // Setup mock database
-        mockDb = {
-            execSync: jest.fn(),
-            runSync: jest.fn((query, ...params) => ({
+        // Setup default mock behaviors
+        if (mockDb) {
+            mockDb.runSync.mockReturnValue({
                 lastInsertRowId: 1,
                 changes: 1,
-            })),
-            getAllSync: jest.fn(() => []),
-        };
-
-        SQLite.openDatabaseSync.mockReturnValue(mockDb);
+            });
+            mockDb.getAllSync.mockReturnValue([]);
+            mockDb.execSync.mockReturnValue(undefined);
+        }
     });
 
     describe('Scenario 1: New Entry Tests', () => {
@@ -191,7 +210,11 @@ describe('Database Service - Local Storage Tests', () => {
             });
 
             test('should handle upsert operation - insert new', () => {
-                mockDb.runSync.mockReturnValue({ changes: 0 });
+                // First call (UPDATE) returns 0 changes
+                // Second call (INSERT) returns success
+                mockDb.runSync
+                    .mockReturnValueOnce({ changes: 0 })
+                    .mockReturnValueOnce({ lastInsertRowId: 20, changes: 1 });
 
                 Database.upsertPassword(
                     20,
@@ -289,7 +312,7 @@ describe('Database Service - Local Storage Tests', () => {
                 const result = Database.getPasswords();
 
                 expect(result).toEqual(mockPasswords);
-                expect(mockDb.getAllSync).toHaveBeenCalledWith('SELECT * FROM passwords');
+                expect(mockDb.getAllSync).toHaveBeenCalledWith('SELECT * FROM passwords WHERE isDeleted = 0 OR isDeleted IS NULL');
             });
 
             test('should return empty array when no passwords exist', () => {
@@ -400,6 +423,10 @@ describe('Database Service - Local Storage Tests', () => {
     describe('Web Platform Tests', () => {
         beforeEach(() => {
             // Mock Platform.OS to be 'web'
+            // NOTE: Changing Platform.OS at runtime might not work if it's a constant in the module.
+            // But jest-expo/react-native mock usually allows it.
+            // However, Database.js checks Platform.OS at IMPORT time for db initialization.
+            // For methods, it checks Platform.OS at RUNTIME.
             Platform.OS = 'web';
 
             // Mock localStorage
@@ -409,6 +436,10 @@ describe('Database Service - Local Storage Tests', () => {
                 removeItem: jest.fn(),
                 clear: jest.fn(),
             };
+        });
+
+        afterEach(() => {
+            Platform.OS = 'ios'; // Reset
         });
 
         test('should add password to localStorage on web', () => {

@@ -49,26 +49,41 @@ export const initDatabase = () => {
   }
 };
 
-export const addPassword = (siteName, username, encryptedPassword, comments = '', cloudSynced = 1) => {
+export const addPassword = (siteName, username, encryptedPassword, comments = '', cloudSynced = 1, id = null) => {
   const lastModified = new Date().toISOString();
 
   if (Platform.OS === 'web') {
     const existing = JSON.parse(localStorage.getItem('passwords') || '[]');
-    const newId = Date.now();
+    const newId = id || Date.now();
     const newEntry = { id: newId, siteName, username, encryptedPassword, lastModified, comments, cloudSynced };
     localStorage.setItem('passwords', JSON.stringify([...existing, newEntry]));
     return { id: newId, lastModified };
   }
-  const result = db.runSync(
-    'INSERT INTO passwords (siteName, username, encryptedPassword, lastModified, comments, cloudSynced) VALUES (?, ?, ?, ?, ?, ?)',
-    siteName,
-    username,
-    encryptedPassword,
-    lastModified,
-    comments,
-    cloudSynced
-  );
-  return { id: result.lastInsertRowId, lastModified };
+
+  if (id) {
+    db.runSync(
+      'INSERT INTO passwords (id, siteName, username, encryptedPassword, lastModified, comments, cloudSynced) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      id,
+      siteName,
+      username,
+      encryptedPassword,
+      lastModified,
+      comments,
+      cloudSynced
+    );
+    return { id, lastModified };
+  } else {
+    const result = db.runSync(
+      'INSERT INTO passwords (siteName, username, encryptedPassword, lastModified, comments, cloudSynced) VALUES (?, ?, ?, ?, ?, ?)',
+      siteName,
+      username,
+      encryptedPassword,
+      lastModified,
+      comments,
+      cloudSynced
+    );
+    return { id: result.lastInsertRowId, lastModified };
+  }
 };
 
 export const getPasswords = () => {

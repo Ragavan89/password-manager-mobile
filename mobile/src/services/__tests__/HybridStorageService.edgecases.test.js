@@ -13,7 +13,7 @@ jest.mock('../Database');
 jest.mock('../FirestoreService');
 jest.mock('expo-secure-store');
 jest.mock('firebase/firestore');
-jest.mock('../../firebase.config', () => ({ app: {} }));
+jest.mock('../../../firebase.config', () => ({ app: {} }));
 jest.mock('../FirebaseAuthService', () => ({
     getCurrentUser: jest.fn(() => ({ uid: 'test_user_123' })),
     signInAnonymouslyUser: jest.fn(),
@@ -22,7 +22,11 @@ jest.mock('../FirebaseAuthService', () => ({
 describe('Hybrid Storage Service - Edge Cases', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        SecureStore.getItemAsync.mockImplementation((key) => {
+        SecureStore.getItemAsync.mockResolvedValue('https://sheets.api.url');
+    });
+
+    describe('Edge Case: Multiple Offline Edits to Same Password', () => {
+        test('Should sync only the final version after multiple offline edits', async () => {
             const password = {
                 id: 1,
                 localId: 1,
@@ -43,7 +47,8 @@ describe('Hybrid Storage Service - Edge Cases', () => {
                 lastModified: edit3Time,
             };
 
-            Database.getPasswords.mockReturnValue([finalPassword]);
+            Database.getActivePasswords.mockReturnValue([finalPassword]);
+            Database.getDeletedPasswords.mockReturnValue([]);
             FirestoreService.getPasswords.mockResolvedValue({
                 success: true,
                 passwords: [password],
@@ -56,6 +61,8 @@ describe('Hybrid Storage Service - Edge Cases', () => {
                 data: () => ({ maxPasswords: 100 }),
             };
             getDoc.mockResolvedValue(mockDoc);
+
+            SecureStore.setItemAsync.mockResolvedValue();
 
             const result = await HybridStorageService.syncBidirectional();
 
@@ -71,6 +78,7 @@ describe('Hybrid Storage Service - Edge Cases', () => {
             );
         });
     });
+
 
     describe('Edge Case: Concurrent Modifications on Different Devices', () => {
         test('Should handle Last-Write-Wins when both devices modify same password', async () => {

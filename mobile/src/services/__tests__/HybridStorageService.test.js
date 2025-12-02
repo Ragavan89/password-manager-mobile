@@ -13,7 +13,7 @@ jest.mock('../Database');
 jest.mock('../FirestoreService');
 jest.mock('expo-secure-store');
 jest.mock('firebase/firestore');
-jest.mock('../../firebase.config', () => ({ app: {} }));
+jest.mock('../../../firebase.config', () => ({ app: {} }));
 jest.mock('../FirebaseAuthService', () => ({
     getCurrentUser: jest.fn(() => ({ uid: 'test_user_123' })),
     signInAnonymouslyUser: jest.fn(),
@@ -105,9 +105,9 @@ describe('Hybrid Storage Service Tests', () => {
 
                 const result = await HybridStorageService.savePassword(passwordData);
 
-                expect(result.success).toBe(false);
-                expect(result.error).toContain('Storage limit reached');
-                expect(Database.addPassword).not.toHaveBeenCalled();
+                expect(result.success).toBe(true);
+                expect(result.warning).toContain('Cloud limit reached');
+                expect(Database.addPassword).toHaveBeenCalled();
             });
 
             test('should handle Firestore limit fetch errors', async () => {
@@ -137,8 +137,8 @@ describe('Hybrid Storage Service Tests', () => {
                     encryptedPassword: 'pass',
                 });
 
-                expect(result.success).toBe(false);
-                expect(result.error).toContain('limit');
+                expect(result.success).toBe(true);
+                expect(result.warning).toContain('Cloud limit reached');
             });
         });
     });

@@ -17,7 +17,7 @@ import {
 import * as FirestoreService from '../FirestoreService';
 
 jest.mock('firebase/firestore');
-jest.mock('../../firebase.config', () => ({
+jest.mock('../../../firebase.config', () => ({
     app: {},
 }));
 
@@ -34,6 +34,7 @@ describe('Firestore Service - Cloud Storage Tests', () => {
                 setDoc.mockResolvedValue();
 
                 const passwordData = {
+                    localId: 1,
                     siteName: 'example.com',
                     username: 'user@example.com',
                     encryptedPassword: 'encrypted_pass',
@@ -180,6 +181,7 @@ describe('Firestore Service - Cloud Storage Tests', () => {
                 setDoc.mockRejectedValue(new Error('Permission denied'));
 
                 const passwordData = {
+                    localId: 1,
                     siteName: 'example.com',
                     username: 'user',
                     encryptedPassword: 'pass',
@@ -258,6 +260,7 @@ describe('Firestore Service - Cloud Storage Tests', () => {
                 setDoc.mockRejectedValue(new Error('User not authenticated'));
 
                 const result = await FirestoreService.savePassword('user123', {
+                    localId: 1,
                     siteName: 'test',
                 });
 
@@ -269,6 +272,7 @@ describe('Firestore Service - Cloud Storage Tests', () => {
                 setDoc.mockRejectedValue(new Error('Quota exceeded'));
 
                 const result = await FirestoreService.savePassword('user123', {
+                    localId: 1,
                     siteName: 'test',
                 });
 
@@ -338,7 +342,7 @@ describe('Firestore Service - Cloud Storage Tests', () => {
             doc.mockReturnValue({ id: 'test_id' });
 
             const beforeSave = new Date().toISOString();
-            await FirestoreService.savePassword('user123', { siteName: 'test' });
+            await FirestoreService.savePassword('user123', { localId: 1, siteName: 'test' });
 
             const savedData = setDoc.mock.calls[1][1];
             expect(savedData.createdAt).toBeDefined();
