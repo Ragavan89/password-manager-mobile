@@ -34,6 +34,7 @@ describe('Firestore Service - Cloud Storage Tests', () => {
                 setDoc.mockResolvedValue();
 
                 const passwordData = {
+                    id: 'test-uuid-123', // Required field
                     localId: 1,
                     siteName: 'example.com',
                     username: 'user@example.com',
@@ -44,7 +45,7 @@ describe('Firestore Service - Cloud Storage Tests', () => {
                 const result = await FirestoreService.savePassword('user123', passwordData);
 
                 expect(result.success).toBe(true);
-                expect(result.id).toBe('firestore_id_123');
+                expect(result.id).toBe('test-uuid-123');
                 expect(setDoc).toHaveBeenCalledTimes(2); // User doc + password doc
             });
 
@@ -116,21 +117,7 @@ describe('Firestore Service - Cloud Storage Tests', () => {
                 expect(deleteDoc).toHaveBeenCalled();
             });
 
-            test('should link local ID to cloud password', async () => {
-                updateDoc.mockResolvedValue();
-
-                const result = await FirestoreService.linkLocalId(
-                    'user123',
-                    'cloud_id_456',
-                    'local_id_123'
-                );
-
-                expect(result.success).toBe(true);
-                expect(updateDoc).toHaveBeenCalledWith(
-                    expect.anything(),
-                    { localId: 'local_id_123' }
-                );
-            });
+            // linkLocalId function was removed - test removed
 
             test('should save master password hash to Firestore', async () => {
                 setDoc.mockResolvedValue();
@@ -181,6 +168,7 @@ describe('Firestore Service - Cloud Storage Tests', () => {
                 setDoc.mockRejectedValue(new Error('Permission denied'));
 
                 const passwordData = {
+                    id: 'test-uuid-456', // Required field
                     localId: 1,
                     siteName: 'example.com',
                     username: 'user',
@@ -272,6 +260,7 @@ describe('Firestore Service - Cloud Storage Tests', () => {
                 setDoc.mockRejectedValue(new Error('Quota exceeded'));
 
                 const result = await FirestoreService.savePassword('user123', {
+                    id: 'test-uuid-789', // Required field
                     localId: 1,
                     siteName: 'test',
                 });
@@ -342,7 +331,11 @@ describe('Firestore Service - Cloud Storage Tests', () => {
             doc.mockReturnValue({ id: 'test_id' });
 
             const beforeSave = new Date().toISOString();
-            await FirestoreService.savePassword('user123', { localId: 1, siteName: 'test' });
+            await FirestoreService.savePassword('user123', { 
+                id: 'test-uuid-timestamp', // Required field
+                localId: 1, 
+                siteName: 'test' 
+            });
 
             const savedData = setDoc.mock.calls[1][1];
             expect(savedData.createdAt).toBeDefined();

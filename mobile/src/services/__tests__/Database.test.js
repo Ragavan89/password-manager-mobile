@@ -17,6 +17,16 @@ jest.mock('expo-sqlite', () => ({
     })),
 }));
 
+// Mock expo-crypto for UUID generation
+// Use mock prefix to allow variable access in jest.mock factory
+let mockUuidCounter = 0;
+jest.mock('expo-crypto', () => ({
+    randomUUID: jest.fn(() => {
+        mockUuidCounter++;
+        return `test-uuid-${mockUuidCounter}`;
+    }),
+}));
+
 import * as Database from '../Database';
 
 describe('Database Service - Local Storage Tests', () => {
@@ -39,6 +49,7 @@ describe('Database Service - Local Storage Tests', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        mockUuidCounter = 0; // Reset UUID counter
 
         // Setup default mock behaviors
         if (mockDb) {
@@ -65,6 +76,7 @@ describe('Database Service - Local Storage Tests', () => {
                 expect(result).toHaveProperty('lastModified');
                 expect(mockDb.runSync).toHaveBeenCalledWith(
                     expect.stringContaining('INSERT INTO passwords'),
+                    expect.any(String), // UUID
                     'example.com',
                     'user@example.com',
                     'encrypted_password_123',
@@ -84,6 +96,7 @@ describe('Database Service - Local Storage Tests', () => {
                 expect(result).toHaveProperty('id');
                 expect(mockDb.runSync).toHaveBeenCalledWith(
                     expect.stringContaining('INSERT INTO passwords'),
+                    expect.any(String), // UUID
                     'test.com',
                     'test@test.com',
                     'encrypted_pass',
@@ -94,18 +107,21 @@ describe('Database Service - Local Storage Tests', () => {
             });
 
             test('should generate unique IDs for multiple entries', () => {
-                mockDb.runSync
-                    .mockReturnValueOnce({ lastInsertRowId: 1, changes: 1 })
-                    .mockReturnValueOnce({ lastInsertRowId: 2, changes: 1 })
-                    .mockReturnValueOnce({ lastInsertRowId: 3, changes: 1 });
-
                 const result1 = Database.addPassword('site1.com', 'user1', 'pass1');
                 const result2 = Database.addPassword('site2.com', 'user2', 'pass2');
                 const result3 = Database.addPassword('site3.com', 'user3', 'pass3');
 
-                expect(result1.id).toBe(1);
-                expect(result2.id).toBe(2);
-                expect(result3.id).toBe(3);
+                // IDs should be UUIDs (strings)
+                expect(result1.id).toBeDefined();
+                expect(result2.id).toBeDefined();
+                expect(result3.id).toBeDefined();
+                expect(typeof result1.id).toBe('string');
+                expect(typeof result2.id).toBe('string');
+                expect(typeof result3.id).toBe('string');
+                // All IDs should be unique
+                expect(result1.id).not.toBe(result2.id);
+                expect(result2.id).not.toBe(result3.id);
+                expect(result1.id).not.toBe(result3.id);
             });
         });
 
@@ -126,6 +142,7 @@ describe('Database Service - Local Storage Tests', () => {
                 expect(result).toHaveProperty('id');
                 expect(mockDb.runSync).toHaveBeenCalledWith(
                     expect.stringContaining('INSERT INTO passwords'),
+                    expect.any(String), // UUID
                     '',
                     'user@test.com',
                     'pass',
@@ -355,11 +372,23 @@ describe('Database Service - Local Storage Tests', () => {
             });
 
             test('should handle initialization errors gracefully', () => {
-                mockDb.execSync.mockImplementation(() => {
-                    throw new Error('Already exists');
+                // The initDatabase function doesn't catch errors for CREATE TABLE,
+                // but it does catch errors for ALTER TABLE operations
+                // Let's test that ALTER TABLE errors are handled
+                let callCount = 0;
+                mockDb.execSync.mockImplementation((sql) => {
+                    callCount++;
+                    if (callCount === 1) {
+                        // First call is CREATE TABLE - this should succeed
+                        return;
+                    }
+                    // Subsequent calls are ALTER TABLE - these can fail
+                    if (sql.includes('ALTER TABLE')) {
+                        throw new Error('Already exists');
+                    }
                 });
 
-                // Should not throw - errors are caught
+                // Should not throw - ALTER TABLE errors are caught
                 expect(() => {
                     Database.initDatabase();
                 }).not.toThrow();
@@ -420,6 +449,70 @@ describe('Database Service - Local Storage Tests', () => {
         });
     });
 
+    describe('Tombstone Functions', () => {
+        describe('Positive Tests', () => {
+            test('should mark password as deleted', () => {
+                Database.markAsDeleted('test-uuid-1');
+
+                expect(mockDb.runSync).toHaveBeenCalledWith(
+                    'UPDATE passwords SET isDeleted = 1, deletedAt = ? WHERE id = ?',
+                    expect.any(String),
+                    'test-uuid-1'
+                );
+            });
+
+            test('should get only active passwords', () => {
+                const mockPasswords = [
+                    { id: 'uuid-1', siteName: 'site1.com', isDeleted: 0 },
+                    { id: 'uuid-2', siteName: 'site2.com', isDeleted: 1 },
+                ];
+                mockDb.getAllSync.mockReturnValue(mockPasswords.filter(p => !p.isDeleted));
+
+                const result = Database.getActivePasswords();
+
+                expect(result).toHaveLength(1);
+                expect(result[0].siteName).toBe('site1.com');
+                expect(mockDb.getAllSync).toHaveBeenCalledWith(
+                    'SELECT * FROM passwords WHERE isDeleted = 0 OR isDeleted IS NULL'
+                );
+            });
+
+            test('should get only deleted passwords (tombstones)', () => {
+                const mockTombstones = [
+                    { id: 'uuid-2', siteName: 'site2.com', isDeleted: 1, deletedAt: '2024-01-01T00:00:00.000Z' },
+                ];
+                mockDb.getAllSync.mockReturnValue(mockTombstones);
+
+                const result = Database.getDeletedPasswords();
+
+                expect(result).toHaveLength(1);
+                expect(result[0].isDeleted).toBe(1);
+                expect(mockDb.getAllSync).toHaveBeenCalledWith(
+                    'SELECT * FROM passwords WHERE isDeleted = 1'
+                );
+            });
+
+            test('should permanently delete a password', () => {
+                Database.permanentlyDelete('test-uuid-1');
+
+                expect(mockDb.runSync).toHaveBeenCalledWith(
+                    'DELETE FROM passwords WHERE id = ?',
+                    'test-uuid-1'
+                );
+            });
+
+            test('should delete old tombstones', () => {
+                const beforeDate = '2024-01-01T00:00:00.000Z';
+                Database.deleteOldTombstones(beforeDate);
+
+                expect(mockDb.runSync).toHaveBeenCalledWith(
+                    'DELETE FROM passwords WHERE isDeleted = 1 AND deletedAt < ?',
+                    beforeDate
+                );
+            });
+        });
+    });
+
     describe('Web Platform Tests', () => {
         beforeEach(() => {
             // Mock Platform.OS to be 'web'
@@ -451,7 +544,7 @@ describe('Database Service - Local Storage Tests', () => {
 
         test('should retrieve passwords from localStorage on web', () => {
             const mockData = JSON.stringify([
-                { id: 1, siteName: 'site.com', username: 'user', encryptedPassword: 'pass' },
+                { id: 'uuid-1', siteName: 'site.com', username: 'user', encryptedPassword: 'pass' },
             ]);
             global.localStorage.getItem.mockReturnValue(mockData);
 

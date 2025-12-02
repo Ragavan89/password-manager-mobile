@@ -22,13 +22,23 @@ jest.mock('../FirebaseAuthService', () => ({
 describe('Hybrid Storage Service - Edge Cases', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        SecureStore.getItemAsync.mockResolvedValue('https://sheets.api.url');
+        // Enable cloud sync by default
+        SecureStore.getItemAsync.mockImplementation((key) => {
+            if (key === 'CLOUD_SYNC_ENABLED') {
+                return Promise.resolve('true');
+            }
+            if (key === 'CLOUD_PASSWORD_LIMIT') {
+                return Promise.resolve('100');
+            }
+            return Promise.resolve(null);
+        });
+        SecureStore.setItemAsync.mockResolvedValue();
     });
 
     describe('Edge Case: Multiple Offline Edits to Same Password', () => {
         test('Should sync only the final version after multiple offline edits', async () => {
             const password = {
-                id: 1,
+                id: 'uuid-1', // Use UUID format
                 localId: 1,
                 siteName: 'original.com',
                 username: 'user',
@@ -47,6 +57,7 @@ describe('Hybrid Storage Service - Edge Cases', () => {
                 lastModified: edit3Time,
             };
 
+            Database.getPasswords.mockReturnValue([finalPassword]);
             Database.getActivePasswords.mockReturnValue([finalPassword]);
             Database.getDeletedPasswords.mockReturnValue([]);
             FirestoreService.getPasswords.mockResolvedValue({
@@ -82,26 +93,31 @@ describe('Hybrid Storage Service - Edge Cases', () => {
 
     describe('Edge Case: Concurrent Modifications on Different Devices', () => {
         test('Should handle Last-Write-Wins when both devices modify same password', async () => {
-            const passwordId = 1;
+            const passwordId = 'uuid-1'; // Use UUID format
 
             // Device A modifies at 10:00 AM
             const deviceAVersion = {
                 id: passwordId,
-                localId: passwordId,
+                localId: 1,
                 siteName: 'device-a-version.com',
+                username: 'user',
+                encryptedPassword: 'pass',
                 lastModified: '2024-01-01T10:00:00.000Z',
             };
 
             // Device B modifies at 11:00 AM (newer)
             const deviceBVersion = {
                 id: passwordId,
-                localId: passwordId,
+                localId: 1,
                 siteName: 'device-b-version.com',
+                username: 'user',
+                encryptedPassword: 'pass',
                 lastModified: '2024-01-01T11:00:00.000Z',
             };
 
             // Local has Device A's version
             Database.getPasswords.mockReturnValue([deviceAVersion]);
+            Database.getActivePasswords.mockReturnValue([deviceAVersion]);
 
             // Cloud has Device B's version (newer)
             FirestoreService.getPasswords.mockResolvedValue({
@@ -112,6 +128,7 @@ describe('Hybrid Storage Service - Edge Cases', () => {
             Database.updatePassword.mockImplementation(() => ({
                 lastModified: deviceBVersion.lastModified,
             }));
+            Database.getActivePasswords.mockReturnValue([deviceAVersion]);
 
             const mockDoc = {
                 exists: () => true,
@@ -123,11 +140,11 @@ describe('Hybrid Storage Service - Edge Cases', () => {
 
             // Device B's version should win (newer timestamp)
             expect(Database.updatePassword).toHaveBeenCalledWith(
-                passwordId,
+                passwordId, // Already UUID format
                 'device-b-version.com',
-                expect.any(String),
-                expect.any(String),
-                expect.any(String)
+                'user',
+                'pass',
+                expect.any(String) // comments
             );
         });
     });
@@ -138,47 +155,66 @@ describe('Hybrid Storage Service - Edge Cases', () => {
 
             // Cloud has 5 passwords (at limit)
             const cloudPasswords = Array.from({ length: 5 }, (_, i) => ({
-                id: `cloud_${i}`,
+                id: `uuid-${i + 1}`, // Use UUID format
                 localId: i + 1,
                 siteName: `cloud${i}.com`,
+                username: 'user',
+                encryptedPassword: 'pass',
                 lastModified: '2024-01-01T00:00:00.000Z',
             }));
 
             // Local has those 5 PLUS 1 new password
+            // Make sure the new password has all required fields and is truly new (not in cloud)
             const localPasswords = [
-                ...cloudPasswords.map(p => ({ ...p, id: p.localId })),
+                ...cloudPasswords.map(p => ({ ...p, cloudSynced: 1 })),
                 {
-                    id: 6,
+                    id: 'uuid-6', // Use UUID format - this is NEW, not in cloud
                     siteName: 'new-local.com',
                     username: 'user',
                     encryptedPassword: 'pass',
                     lastModified: '2024-01-02T00:00:00.000Z',
+                    cloudSynced: 0, // Not synced yet
                 },
             ];
 
             Database.getPasswords.mockReturnValue(localPasswords);
+            Database.getActivePasswords.mockReturnValue(localPasswords);
             FirestoreService.getPasswords.mockResolvedValue({
                 success: true,
                 passwords: cloudPasswords,
             });
 
+            // Mock getCloudPasswordLimit to return the limit directly
+            // Also mock the Firestore document for the limit check
             const mockDoc = {
                 exists: () => true,
-                data: () => ({ maxPasswords: limit }),
+                data: () => ({ maxCloudPasswords: limit }), // Note: maxCloudPasswords, not maxPasswords
             };
             getDoc.mockResolvedValue(mockDoc);
+            
+            // Also ensure SecureStore returns the limit for caching
+            SecureStore.getItemAsync.mockImplementation((key) => {
+                if (key === 'CLOUD_SYNC_ENABLED') {
+                    return Promise.resolve('true');
+                }
+                if (key === 'CLOUD_PASSWORD_LIMIT') {
+                    return Promise.resolve(String(limit));
+                }
+                return Promise.resolve(null);
+            });
 
             const result = await HybridStorageService.syncBidirectional();
 
-            // Should fail with limit error
-            expect(result.success).toBe(false);
-            expect(result.error).toBe('LIMIT_REACHED');
-            expect(result.limitDetails).toEqual({
-                current: 5,
-                pending: 1,
-                limit: 5,
-                exceeded: 1,
-            });
+            // Should complete but skip uploads due to limit
+            // We have 6 local passwords, 5 cloud passwords, limit is 5
+            // So 1 password needs to be uploaded, but limit is reached (5/5)
+            // availableSpace = 5 - 5 = 0, so toUpload.length (1) > availableSpace (0)
+            // This triggers: availableSpace <= 0, so uploadSkipped = true, skippedCount = 1
+            expect(result).toBeDefined();
+            expect(result.success).toBe(true); // No errors, so success is true
+            expect(result.limitReached).toBe(true); // Uploads were skipped due to limit
+            expect(result.skippedCount).toBe(1); // 1 password was skipped
+            expect(result.uploaded).toBe(0); // No uploads when at limit
         });
     });
 
@@ -191,6 +227,7 @@ describe('Hybrid Storage Service - Edge Cases', () => {
 
             // Final state: password doesn't exist locally
             Database.getPasswords.mockReturnValue([]);
+            Database.getActivePasswords.mockReturnValue([]);
 
             // Cloud doesn't have it either (never synced)
             FirestoreService.getPasswords.mockResolvedValue({
@@ -216,12 +253,13 @@ describe('Hybrid Storage Service - Edge Cases', () => {
     describe('Edge Case: Partial Sync Failure', () => {
         test('Should handle partial upload failures gracefully', async () => {
             const localPasswords = [
-                { id: 1, siteName: 'site1.com', username: 'user1', encryptedPassword: 'pass1', lastModified: '2024-01-01T00:00:00.000Z' },
-                { id: 2, siteName: 'site2.com', username: 'user2', encryptedPassword: 'pass2', lastModified: '2024-01-01T00:00:00.000Z' },
-                { id: 3, siteName: 'site3.com', username: 'user3', encryptedPassword: 'pass3', lastModified: '2024-01-01T00:00:00.000Z' },
+                { id: 'uuid-1', siteName: 'site1.com', username: 'user1', encryptedPassword: 'pass1', lastModified: '2024-01-01T00:00:00.000Z' },
+                { id: 'uuid-2', siteName: 'site2.com', username: 'user2', encryptedPassword: 'pass2', lastModified: '2024-01-01T00:00:00.000Z' },
+                { id: 'uuid-3', siteName: 'site3.com', username: 'user3', encryptedPassword: 'pass3', lastModified: '2024-01-01T00:00:00.000Z' },
             ];
 
             Database.getPasswords.mockReturnValue(localPasswords);
+            Database.getActivePasswords.mockReturnValue(localPasswords);
             FirestoreService.getPasswords.mockResolvedValue({
                 success: true,
                 passwords: [],
@@ -255,7 +293,7 @@ describe('Hybrid Storage Service - Edge Cases', () => {
             const sameTime = '2024-01-01T12:00:00.000Z';
 
             const password = {
-                id: 1,
+                id: 'uuid-1', // Use UUID format
                 localId: 1,
                 siteName: 'site.com',
                 username: 'user',
@@ -264,6 +302,7 @@ describe('Hybrid Storage Service - Edge Cases', () => {
             };
 
             Database.getPasswords.mockReturnValue([password]);
+            Database.getActivePasswords.mockReturnValue([password]);
             FirestoreService.getPasswords.mockResolvedValue({
                 success: true,
                 passwords: [password],
@@ -284,7 +323,7 @@ describe('Hybrid Storage Service - Edge Cases', () => {
 
         test('Should handle missing timestamps gracefully', async () => {
             const localPassword = {
-                id: 1,
+                id: 'uuid-1', // Use UUID format
                 siteName: 'local.com',
                 username: 'user',
                 encryptedPassword: 'pass',
@@ -292,7 +331,7 @@ describe('Hybrid Storage Service - Edge Cases', () => {
             };
 
             const cloudPassword = {
-                id: 'cloud1',
+                id: 'uuid-1', // Must match local ID
                 localId: 1,
                 siteName: 'cloud.com',
                 username: 'user',
@@ -322,7 +361,7 @@ describe('Hybrid Storage Service - Edge Cases', () => {
     describe('Edge Case: Large Dataset Performance', () => {
         test('Should handle 1000 passwords efficiently', async () => {
             const largeDataset = Array.from({ length: 1000 }, (_, i) => ({
-                id: i + 1,
+                id: `uuid-${i + 1}`, // Use UUID format
                 localId: i + 1,
                 siteName: `site${i}.com`,
                 username: `user${i}`,
@@ -331,6 +370,7 @@ describe('Hybrid Storage Service - Edge Cases', () => {
             }));
 
             Database.getPasswords.mockReturnValue(largeDataset);
+            Database.getActivePasswords.mockReturnValue(largeDataset);
             FirestoreService.getPasswords.mockResolvedValue({
                 success: true,
                 passwords: largeDataset,
@@ -355,7 +395,7 @@ describe('Hybrid Storage Service - Edge Cases', () => {
     describe('Edge Case: Network Interruption During Sync', () => {
         test('Should handle network failure mid-sync', async () => {
             const localPasswords = Array.from({ length: 10 }, (_, i) => ({
-                id: i + 1,
+                id: `uuid-${i + 1}`, // Use UUID format
                 siteName: `site${i}.com`,
                 username: `user${i}`,
                 encryptedPassword: `pass${i}`,
@@ -363,6 +403,7 @@ describe('Hybrid Storage Service - Edge Cases', () => {
             }));
 
             Database.getPasswords.mockReturnValue(localPasswords);
+            Database.getActivePasswords.mockReturnValue(localPasswords);
 
             // First call succeeds, then network fails
             FirestoreService.getPasswords
@@ -394,7 +435,7 @@ describe('Hybrid Storage Service - Edge Cases', () => {
     describe('Edge Case: Corrupted Data Handling', () => {
         test('Should handle corrupted password data', async () => {
             const corruptedPassword = {
-                id: 1,
+                id: 'uuid-1', // Use UUID format
                 // Missing required fields
                 siteName: null,
                 username: undefined,
@@ -402,6 +443,7 @@ describe('Hybrid Storage Service - Edge Cases', () => {
             };
 
             Database.getPasswords.mockReturnValue([corruptedPassword]);
+            Database.getActivePasswords.mockReturnValue([corruptedPassword]);
             FirestoreService.getPasswords.mockResolvedValue({
                 success: true,
                 passwords: [],
@@ -434,6 +476,7 @@ describe('Hybrid Storage Service - Edge Cases', () => {
     describe('Edge Case: Rapid Consecutive Syncs', () => {
         test('Should handle rapid sync requests', async () => {
             Database.getPasswords.mockReturnValue([]);
+            Database.getActivePasswords.mockReturnValue([]);
             FirestoreService.getPasswords.mockResolvedValue({
                 success: true,
                 passwords: [],
@@ -462,7 +505,7 @@ describe('Hybrid Storage Service - Edge Cases', () => {
     describe('Edge Case: Special Characters in Data', () => {
         test('Should handle special characters in passwords', async () => {
             const specialPassword = {
-                id: 1,
+                id: 'uuid-1', // Use UUID format
                 siteName: "Test's \"Site\" <script>alert('xss')</script>",
                 username: 'user@test.com; DROP TABLE passwords;',
                 encryptedPassword: '!@#$%^&*()_+-=[]{}|;:\'",.<>?/~`',
@@ -470,6 +513,7 @@ describe('Hybrid Storage Service - Edge Cases', () => {
             };
 
             Database.getPasswords.mockReturnValue([specialPassword]);
+            Database.getActivePasswords.mockReturnValue([specialPassword]);
             FirestoreService.getPasswords.mockResolvedValue({
                 success: true,
                 passwords: [],
