@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
+import * as Crypto from 'expo-crypto';
 
 let db = null;
 if (Platform.OS !== 'web') {
@@ -10,7 +11,7 @@ export const initDatabase = () => {
   if (Platform.OS === 'web') return;
   db.execSync(`
     CREATE TABLE IF NOT EXISTS passwords (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id TEXT PRIMARY KEY,
       siteName TEXT NOT NULL,
       username TEXT NOT NULL,
       encryptedPassword TEXT NOT NULL,
@@ -51,39 +52,27 @@ export const initDatabase = () => {
 
 export const addPassword = (siteName, username, encryptedPassword, comments = '', cloudSynced = 1, id = null) => {
   const lastModified = new Date().toISOString();
+  // Generate UUID if not provided
+  const newId = id || Crypto.randomUUID();
 
   if (Platform.OS === 'web') {
     const existing = JSON.parse(localStorage.getItem('passwords') || '[]');
-    const newId = id || Date.now();
     const newEntry = { id: newId, siteName, username, encryptedPassword, lastModified, comments, cloudSynced };
     localStorage.setItem('passwords', JSON.stringify([...existing, newEntry]));
     return { id: newId, lastModified };
   }
 
-  if (id) {
-    db.runSync(
-      'INSERT INTO passwords (id, siteName, username, encryptedPassword, lastModified, comments, cloudSynced) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      id,
-      siteName,
-      username,
-      encryptedPassword,
-      lastModified,
-      comments,
-      cloudSynced
-    );
-    return { id, lastModified };
-  } else {
-    const result = db.runSync(
-      'INSERT INTO passwords (siteName, username, encryptedPassword, lastModified, comments, cloudSynced) VALUES (?, ?, ?, ?, ?, ?)',
-      siteName,
-      username,
-      encryptedPassword,
-      lastModified,
-      comments,
-      cloudSynced
-    );
-    return { id: result.lastInsertRowId, lastModified };
-  }
+  db.runSync(
+    'INSERT INTO passwords (id, siteName, username, encryptedPassword, lastModified, comments, cloudSynced) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    newId,
+    siteName,
+    username,
+    encryptedPassword,
+    lastModified,
+    comments,
+    cloudSynced
+  );
+  return { id: newId, lastModified };
 };
 
 export const getPasswords = () => {

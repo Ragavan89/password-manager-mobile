@@ -109,7 +109,7 @@ export const savePassword = async (passwordData) => {
             await FirestoreService.savePassword(user.uid, {
                 ...passwordData,
                 lastModified, // Use the exact timestamp from local DB
-                localId: id // Store local ID for reference
+                id: id // Use UUID
             });
 
             // Mark as synced in local DB
@@ -174,21 +174,44 @@ export const updatePassword = async (id, passwordData) => {
         const cloudEnabled = await isCloudSyncEnabled();
         if (cloudEnabled) {
             const user = getCurrentUser();
-            // Find the Firestore ID for this local ID
-            const firestoreId = await getFirestoreIdForLocalId(user.uid, id);
-            if (firestoreId) {
-                await FirestoreService.updatePassword(user.uid, firestoreId, {
-                    ...passwordData,
-                    lastModified // Use the exact timestamp from local DB
-                });
-                uploadedToCloud = true;
 
-                // Ensure it's marked as synced
-                Database.updateCloudSyncStatus(id, 1);
+            // Try to update, but if document doesn't exist, create it (upsert behavior)
+            const updateResult = await FirestoreService.updatePassword(user.uid, id, {
+                ...passwordData,
+                lastModified // Use the exact timestamp from local DB
+            });
+
+            // If update failed because document doesn't exist, check limit before creating
+            if (!updateResult.success && updateResult.error?.includes('No document to update')) {
+                // Check cloud limit before creating new document
+                const cloudLimit = await getCloudPasswordLimit();
+                const cloudResult = await FirestoreService.getPasswords(user.uid);
+                const currentCloudCount = cloudResult.success ? (cloudResult.passwords || []).length : 0;
+
+                if (currentCloudCount >= cloudLimit) {
+                    console.log(`⚠️ Cannot create document - limit reached (${currentCloudCount}/${cloudLimit})`);
+                    // Don't upload, keep as unsynced
+                    uploadedToCloud = false;
+                } else {
+                    console.log(`⚠️ Document doesn't exist, creating it (${currentCloudCount + 1}/${cloudLimit})`);
+                    await FirestoreService.savePassword(user.uid, {
+                        id: id,
+                        ...passwordData,
+                        lastModified
+                    });
+                    uploadedToCloud = true;
+                }
+            } else if (updateResult.success) {
+                uploadedToCloud = true;
             }
 
-            // Update last sync time
-            await SecureStore.setItemAsync('LAST_SYNC_TIME', new Date().toISOString());
+            if (uploadedToCloud) {
+                // Ensure it's marked as synced
+                Database.updateCloudSyncStatus(id, 1);
+
+                // Update last sync time
+                await SecureStore.setItemAsync('LAST_SYNC_TIME', new Date().toISOString());
+            }
         }
 
         if (!uploadedToCloud) {
@@ -213,14 +236,10 @@ export const deletePassword = async (id) => {
         if (cloudEnabled) {
             const user = getCurrentUser();
             if (user) {
-                const firestoreId = await getFirestoreIdForLocalId(user.uid, id);
-                if (firestoreId && typeof firestoreId === 'string') {
-                    const result = await FirestoreService.deletePassword(user.uid, firestoreId);
-                    if (!result.success) {
-                        console.warn('Failed to delete from Firestore:', result.error);
-                    }
-                } else {
-                    console.log('No Firestore ID found for local ID:', id);
+                // Use ID directly (UUID)
+                const result = await FirestoreService.deletePassword(user.uid, id);
+                if (!result.success) {
+                    console.warn('Failed to delete from Firestore:', result.error);
                 }
             }
         }
@@ -287,7 +306,7 @@ export const syncBidirectional = async () => {
 
         // OPTIMIZATION 1: Create hash maps for O(1) lookups instead of O(n)
         const localMap = new Map(localPasswords.map(p => [p.id, p]));
-        const cloudMap = new Map(cloudPasswords.map(p => [p.localId, p]));
+        const cloudMap = new Map(cloudPasswords.map(p => [p.id, p]));
 
         // Collect operations to batch
         let toUpload = [];
@@ -295,13 +314,13 @@ export const syncBidirectional = async () => {
         const toUpdateCloud = [];
         const toUpdateLocal = [];
 
-        // CRITICAL FIX: Track which localIds we're uploading to prevent duplicates
-        const uploadingLocalIds = new Set();
+        // CRITICAL FIX: Track which IDs we're uploading to prevent duplicates
+        const uploadingIds = new Set();
 
         // Step 2: Process cloud passwords (O(n) instead of O(n²))
         for (const cloudPwd of cloudPasswords) {
-            // Match by localId only
-            const localPwd = localMap.get(cloudPwd.localId);
+            // Match by ID (UUID)
+            const localPwd = localMap.get(cloudPwd.id);
 
             if (!localPwd) {
                 // Case B: Only in cloud → Download to local
@@ -331,12 +350,12 @@ export const syncBidirectional = async () => {
         for (const localPwd of localPasswords) {
             if (!cloudMap.has(localPwd.id)) {
                 // Case D: Only in local → Upload to cloud
-                // CRITICAL FIX: Check if we're already uploading this localId
-                if (!uploadingLocalIds.has(localPwd.id)) {
+                // CRITICAL FIX: Check if we're already uploading this ID
+                if (!uploadingIds.has(localPwd.id)) {
                     toUpload.push(localPwd);
-                    uploadingLocalIds.add(localPwd.id);
+                    uploadingIds.add(localPwd.id);
                 } else {
-                    console.warn(`⚠️ Duplicate upload prevented for ${localPwd.siteName} (localId: ${localPwd.id})`);
+                    console.warn(`⚠️ Duplicate upload prevented for ${localPwd.siteName} (ID: ${localPwd.id})`);
                 }
             }
             // If exists in both, already handled in Step 2
@@ -377,24 +396,15 @@ export const syncBidirectional = async () => {
         // Download new passwords
         for (const cloudPwd of toDownload) {
             try {
-                // Try to reuse the localId from cloud if available to prevent duplicates
-                // and avoid unnecessary cloud updates (which might be blocked by limits)
-                const targetId = cloudPwd.localId || null;
-
+                // Use the UUID from cloud
                 const { id } = Database.addPassword(
                     cloudPwd.siteName || 'Untitled',
                     cloudPwd.username || '',
                     cloudPwd.encryptedPassword || '',
                     cloudPwd.comments || '',
                     1, // Mark as synced
-                    targetId // Pass the ID
+                    cloudPwd.id // Pass the UUID
                 );
-
-                // FIX: Link the new local ID to the cloud password
-                // Only if we generated a NEW ID (i.e. targetId was null)
-                if (cloudPwd.id && !targetId) {
-                    await FirestoreService.linkLocalId(user.uid, cloudPwd.id, id);
-                }
             } catch (err) {
                 console.error(`❌ Error downloading ${cloudPwd.siteName}:`, err);
             }
@@ -440,7 +450,7 @@ export const syncBidirectional = async () => {
                         encryptedPassword: pwd.encryptedPassword,
                         comments: pwd.comments,
                         lastModified: pwd.lastModified,
-                        localId: pwd.id
+                        id: pwd.id // Use UUID
                     });
                 })
             );
@@ -549,12 +559,26 @@ export const syncFromCloud = async () => {
                 const comments = cloudPassword.comments || '';
                 const lastModified = cloudPassword.lastModified || cloudPassword.updatedAt || new Date().toISOString();
 
-                const localId = cloudPassword.localId;
+                const localId = cloudPassword.id; // Use UUID
                 if (localId) {
-                    // Update existing local password
-                    await Database.updatePassword(localId, siteName, username, encryptedPassword, comments);
+                    // Check if it exists locally (using upsert logic)
+                    // Since we use UUIDs, we can just try to add it with the ID
+                    // But Database.addPassword might fail if ID exists, so we should check or use upsert
+                    // For now, let's assume we use addPassword with ID, and if it fails, we update
+                    // Actually, Database.addPassword with ID uses INSERT, so it will fail if exists.
+                    // Let's use upsertPassword from Database if available, or check existence.
+                    // Given the context, let's use upsertPassword which handles both.
+
+                    Database.upsertPassword(
+                        localId,
+                        siteName,
+                        username,
+                        encryptedPassword,
+                        lastModified,
+                        comments
+                    );
                 } else {
-                    // Add new password to local DB
+                    // Should not happen with UUIDs, but fallback
                     await Database.addPassword(siteName, username, encryptedPassword, comments);
                 }
             } catch (err) {
@@ -585,20 +609,4 @@ export const getLastSyncTime = async () => {
     }
 };
 
-/**
- * Helper: Get Firestore ID for a local ID
- */
-const getFirestoreIdForLocalId = async (userId, localId) => {
-    try {
-        const result = await FirestoreService.getPasswords(userId);
-        if (result.success) {
-            // Match by localId only
-            const match = result.passwords.find(p => p.localId === localId);
-            return match?.id;
-        }
-        return null;
-    } catch (error) {
-        console.error('Error getting Firestore ID:', error);
-        return null;
-    }
-};
+

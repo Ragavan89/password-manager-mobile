@@ -22,10 +22,10 @@ const firestore = getFirestore(app, 'keyvault-pro-india');
  */
 export const savePassword = async (userId, passwordData) => {
     try {
-        // Validate that localId exists
-        if (!passwordData.localId) {
-            console.error('❌ savePassword called without localId:', passwordData);
-            return { success: false, error: 'localId is required' };
+        // Validate that id exists (UUID)
+        if (!passwordData.id) {
+            console.error('❌ savePassword called without id:', passwordData);
+            return { success: false, error: 'id is required' };
         }
 
         // First, ensure the user document exists
@@ -40,19 +40,21 @@ export const savePassword = async (userId, passwordData) => {
             throw userDocError;
         }
 
-        // CRITICAL FIX: Use localId as document ID to enforce uniqueness
-        // Format: local_{localId} (e.g., local_12)
-        const documentId = `local_${passwordData.localId}`;
+        // Use UUID as document ID
+        const documentId = passwordData.id;
         const passwordRef = doc(firestore, 'users', userId, 'passwords', documentId);
+
+        // Remove id and localId from data - ID is stored as document ID only
+        const { id, localId, ...dataToSave } = passwordData;
 
         try {
             await setDoc(passwordRef, {
-                ...passwordData,
+                ...dataToSave,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             });
 
-            console.log(`✅ Saved password with localId ${passwordData.localId} → Firestore ID: ${documentId}`);
+            console.log(`✅ Saved password with ID ${documentId} to Firestore`);
             return { success: true, id: documentId };
         } catch (passwordDocError) {
             console.error('❌ Failed to create password document:', passwordDocError);
@@ -111,25 +113,17 @@ export const updatePassword = async (userId, passwordId, passwordData) => {
         });
         return { success: true };
     } catch (error) {
-        console.error('Error updating password:', error);
+        // Don't log as error if document doesn't exist - this is expected for offline passwords
+        if (error.message?.includes('No document to update')) {
+            console.log('⚠️ Document does not exist in cloud (offline password)');
+        } else {
+            console.error('Error updating password:', error);
+        }
         return { success: false, error: error.message };
     }
 };
 
-/**
- * Link a local ID to a cloud password without updating timestamp
- * This prevents sync loops when downloading existing passwords
- */
-export const linkLocalId = async (userId, passwordId, localId) => {
-    try {
-        const passwordRef = doc(firestore, 'users', userId, 'passwords', passwordId);
-        await updateDoc(passwordRef, { localId });
-        return { success: true };
-    } catch (error) {
-        console.error('Error linking local ID:', error);
-        return { success: false, error: error.message };
-    }
-};
+
 
 /**
  * Delete a password
