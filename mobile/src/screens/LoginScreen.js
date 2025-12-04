@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, TextInput, Text, TouchableOpacity, StyleSheet, Alert, SafeAreaView, KeyboardAvoidingView, Platform, Modal, ScrollView } from 'react-native';
+import { View, TextInput, Text, TouchableOpacity, StyleSheet, Alert, SafeAreaView, KeyboardAvoidingView, Platform, Modal, ScrollView, ActivityIndicator } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import CustomAlert from '../components/CustomAlert';
 import { isMasterPasswordSet, isPINSet, verifyPIN } from '../services/Encryption';
+import { setupPin } from '../services/AuthService';
 
 export default function LoginScreen({ navigation }) {
     const [pin, setPin] = useState('');
@@ -10,6 +11,7 @@ export default function LoginScreen({ navigation }) {
     const [newPin, setNewPin] = useState('');
     const [confirmPin, setConfirmPin] = useState('');
     const [biometricAvailable, setBiometricAvailable] = useState(false);
+    const [isResettingPin, setIsResettingPin] = useState(false);
     const pinInputRef = useRef(null);
 
     // Custom alert state
@@ -128,7 +130,7 @@ export default function LoginScreen({ navigation }) {
         }
     };
 
-    const handleSaveNewPin = () => {
+    const handleSaveNewPin = async () => {
         // Validate new PIN
         if (!newPin || newPin.length !== 4) {
             Alert.alert('Error', 'PIN must be exactly 4 digits');
@@ -141,22 +143,43 @@ export default function LoginScreen({ navigation }) {
             return;
         }
 
-        // In a real app, you would save this securely
-        // For now, we'll just show success and close modal
-        Alert.alert(
-            'Success! ✅',
-            `Your new PIN has been set.\n\nNew PIN: ${newPin}\n\n⚠️ Important: In this demo version, the PIN is still hardcoded to 1234. In production, your new PIN would be saved securely.`,
-            [
-                {
-                    text: 'OK',
-                    onPress: () => {
-                        setShowResetModal(false);
-                        setNewPin('');
-                        setConfirmPin('');
-                    }
-                }
-            ]
-        );
+        setIsResettingPin(true);
+        try {
+            // Save the new PIN securely
+            const result = await setupPin(newPin);
+            
+            if (result.success) {
+                Alert.alert(
+                    'Success! ✅',
+                    'Your PIN has been reset successfully. You can now use your new PIN to unlock the vault.',
+                    [
+                        {
+                            text: 'OK',
+                            onPress: () => {
+                                setShowResetModal(false);
+                                setNewPin('');
+                                setConfirmPin('');
+                            }
+                        }
+                    ]
+                );
+            } else {
+                Alert.alert(
+                    'Error',
+                    result.error || 'Failed to reset PIN. Please try again.',
+                    [{ text: 'OK' }]
+                );
+            }
+        } catch (error) {
+            console.error('Error resetting PIN:', error);
+            Alert.alert(
+                'Error',
+                'An unexpected error occurred while resetting your PIN. Please try again.',
+                [{ text: 'OK' }]
+            );
+        } finally {
+            setIsResettingPin(false);
+        }
     };
 
     return (
@@ -280,10 +303,15 @@ export default function LoginScreen({ navigation }) {
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                    style={styles.saveButton}
+                                    style={[styles.saveButton, isResettingPin && styles.saveButtonDisabled]}
                                     onPress={handleSaveNewPin}
+                                    disabled={isResettingPin}
                                 >
-                                    <Text style={styles.saveButtonText}>Save New PIN</Text>
+                                    {isResettingPin ? (
+                                        <ActivityIndicator color="#fff" />
+                                    ) : (
+                                        <Text style={styles.saveButtonText}>Save New PIN</Text>
+                                    )}
                                 </TouchableOpacity>
                             </View>
                         </ScrollView>
@@ -304,7 +332,7 @@ export default function LoginScreen({ navigation }) {
                     <Text style={styles.legalSeparator}>•</Text>
                     <TouchableOpacity onPress={() => Alert.alert(
                         'Privacy Policy',
-                        'Your privacy is our priority.\n\n1. Data Ownership: You own your data. Passwords are stored locally on your device and synced only to your personal Google Sheet.\n\n2. Encryption: All sensitive data is encrypted using AES-256 before storage.\n\n3. No Tracking: We do not collect, track, or sell your personal information.\n\n4. Permissions: Internet access is required only for syncing with your Google Sheet.',
+                        'Your privacy is our priority.\n\n1. Data Ownership: You own your data. Passwords are stored locally on your device and synced to Firebase cloud storage when enabled.\n\n2. Encryption: All sensitive data is encrypted using AES-256 before storage.\n\n3. No Tracking: We do not collect, track, or sell your personal information.\n\n4. Permissions: Internet access is required only for syncing with cloud storage.',
                         [{ text: 'Close' }]
                     )}>
                         <Text style={styles.legalLinkText}>Privacy</Text>
@@ -523,6 +551,9 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         alignItems: 'center',
         backgroundColor: '#007AFF',
+    },
+    saveButtonDisabled: {
+        opacity: 0.6,
     },
     saveButtonText: {
         color: '#fff',

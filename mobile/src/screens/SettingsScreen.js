@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, Alert, ScrollView, TouchableOpacity, Modal, ActivityIndicator, TextInput } from 'react-native';
+import { View, StyleSheet, Text, Alert, ScrollView, TouchableOpacity, Modal, ActivityIndicator, TextInput, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import * as Clipboard from 'expo-clipboard';
 import { verifyPIN } from '../services/Encryption';
@@ -17,6 +18,7 @@ export default function SettingsScreen({ navigation }) {
     const [lastSyncTime, setLastSyncTime] = useState(null);
     const [syncing, setSyncing] = useState(false);
     const [cloudLimit, setCloudLimit] = useState(AppConfig.DEFAULT_CLOUD_PASSWORD_LIMIT);
+    const [isLoadingSyncStatus, setIsLoadingSyncStatus] = useState(true);
 
     // View Master Password states
     const [showPinModal, setShowPinModal] = useState(false);
@@ -49,17 +51,27 @@ export default function SettingsScreen({ navigation }) {
 
     const loadCloudSyncStatus = async () => {
         try {
+            setIsLoadingSyncStatus(true);
             const enabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
             const email = await SecureStore.getItemAsync('FIREBASE_USER_EMAIL');
             const lastSync = await getLastSyncTime();
             const limit = await getCloudPasswordLimit();
+            
+            // Verify user is actually authenticated (not just flag set)
+            const user = getCurrentUser();
+            const isActuallyEnabled = enabled === 'true' && user !== null;
 
-            setCloudSyncEnabled(enabled === 'true');
+            setCloudSyncEnabled(isActuallyEnabled);
             setUserEmail(email || '');
             setLastSyncTime(lastSync);
             setCloudLimit(limit);
         } catch (error) {
             console.error('Error loading cloud sync status:', error);
+            // On error, verify user status synchronously as fallback
+            const user = getCurrentUser();
+            setCloudSyncEnabled(user !== null);
+        } finally {
+            setIsLoadingSyncStatus(false);
         }
     };
 
@@ -254,12 +266,22 @@ export default function SettingsScreen({ navigation }) {
     };
 
     return (
-        <ScrollView style={styles.container}>
-            {/* Cloud Sync Section */}
-            <View style={styles.section}>
+        <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+            <ScrollView 
+                style={styles.container}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={true}
+            >
+                {/* Cloud Sync Section */}
+                <View style={styles.section}>
                 <Text style={styles.sectionTitle}>☁️ Cloud Sync</Text>
 
-                {!cloudSyncEnabled ? (
+                {isLoadingSyncStatus ? (
+                    <View style={styles.card}>
+                        <ActivityIndicator size="small" color="#007AFF" style={{ marginVertical: 20 }} />
+                        <Text style={[styles.cardDescription, { textAlign: 'center' }]}>Loading sync status...</Text>
+                    </View>
+                ) : !cloudSyncEnabled ? (
                     <View style={styles.card}>
                         <Text style={styles.cardTitle}>Backup to Cloud</Text>
                         <Text style={styles.cardDescription}>
@@ -438,24 +460,32 @@ export default function SettingsScreen({ navigation }) {
                 </View>
             </Modal>
 
-            {/* Custom Alert for Sync Messages */}
-            <CustomAlert
-                visible={alertConfig.visible}
-                title={alertConfig.title}
-                message={alertConfig.message}
-                type={alertConfig.type}
-                buttons={alertConfig.buttons}
-                textAlign={alertConfig.textAlign}
-                onClose={() => setAlertConfig({ ...alertConfig, visible: false })}
-            />
-        </ScrollView >
+                {/* Custom Alert for Sync Messages */}
+                <CustomAlert
+                    visible={alertConfig.visible}
+                    title={alertConfig.title}
+                    message={alertConfig.message}
+                    type={alertConfig.type}
+                    buttons={alertConfig.buttons}
+                    textAlign={alertConfig.textAlign}
+                    onClose={() => setAlertConfig({ ...alertConfig, visible: false })}
+                />
+            </ScrollView>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
+    safeArea: {
+        flex: 1,
+        backgroundColor: '#f8f9fa',
+    },
     container: {
         flex: 1,
         backgroundColor: '#f8f9fa',
+    },
+    scrollContent: {
+        paddingBottom: Platform.OS === 'android' ? 24 : 16,
     },
     section: {
         margin: 16,

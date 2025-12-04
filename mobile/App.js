@@ -6,7 +6,6 @@ import { StatusBar } from 'expo-status-bar';
 import HomeScreen from './src/screens/HomeScreen';
 import AddPasswordScreen from './src/screens/AddPasswordScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
-import SetupGuideScreen from './src/screens/SetupGuideScreen';
 import SetupMasterPasswordScreen from './src/screens/SetupMasterPasswordScreen';
 import SetupPINScreen from './src/screens/SetupPINScreen';
 import LoginScreen from './src/screens/LoginScreen';
@@ -44,11 +43,6 @@ export default function App() {
           name="Settings"
           component={SettingsScreen}
           options={{ title: 'Configuration' }}
-        />
-        <Stack.Screen
-          name="SetupGuide"
-          component={SetupGuideScreen}
-          options={{ title: 'Setup Guide' }}
         />
         <Stack.Screen
           name="SetupPIN"

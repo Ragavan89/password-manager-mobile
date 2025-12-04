@@ -16,7 +16,6 @@ export const API_TIMEOUT_MS = 10000; // 10 seconds
 
 // Storage Keys
 export const STORAGE_KEYS = {
-    API_URL: '@api_url',
     SYNC_QUEUE: '@sync_queue',
     LAST_SYNC: '@last_sync_time',
 };

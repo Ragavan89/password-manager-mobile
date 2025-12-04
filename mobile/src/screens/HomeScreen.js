@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, TextInput, Animated, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as HybridStorageService from '../services/HybridStorageService';
 import { decryptPassword } from '../services/Encryption';
@@ -9,16 +9,15 @@ import { getCurrentUser } from '../services/FirebaseAuthService';
 import * as SecureStore from 'expo-secure-store';
 
 export default function HomeScreen({ navigation }) {
+    const insets = useSafeAreaInsets();
     const [passwords, setPasswords] = useState([]);
     const [filteredPasswords, setFilteredPasswords] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
-    const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState({});
     const [expandedCards, setExpandedCards] = useState({});
     const [decryptedPasswords, setDecryptedPasswords] = useState({});
     const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
     const [lastSyncTime, setLastSyncTime] = useState(null);
-    const [syncing, setSyncing] = useState(false);
 
     // Load cloud sync status on mount
     useEffect(() => {
@@ -27,7 +26,8 @@ export default function HomeScreen({ navigation }) {
 
     useFocusEffect(
         useCallback(() => {
-            loadPasswords();
+            // Load passwords without triggering sync on focus (to avoid delays)
+            loadPasswords({ silent: false, skipSync: true });
             loadCloudSyncStatus();
         }, [])
     );
@@ -111,14 +111,12 @@ export default function HomeScreen({ navigation }) {
                 color: '#343a40'
             }
         });
-    }, [navigation, cloudSyncEnabled, syncing]);
+        }, [navigation, cloudSyncEnabled]);
 
-    const loadPasswords = async (options = { silent: false }) => {
-        if (!options.silent) {
-            setLoading(true);
-        }
+    const loadPasswords = async (options = { silent: false, skipSync: false }) => {
+        // OPTIMIZATION: Never show loading spinner - always load instantly
         try {
-            // Load from HybridStorageService (local-first with cloud sync)
+            // OPTIMIZATION: Load local data FIRST (instant display)
             const data = await HybridStorageService.getPasswords();
             // Sort by site name ascending
             const sortedData = [...data].sort((a, b) =>
@@ -126,19 +124,61 @@ export default function HomeScreen({ navigation }) {
             );
             setPasswords(sortedData);
 
-            // Decrypt all passwords asynchronously
+            // OPTIMIZATION: Lazy decryption - only decrypt when needed (when card is expanded)
+            // Initialize with empty decrypted passwords - will decrypt on-demand
             const decrypted = {};
-            for (const item of sortedData) {
-                decrypted[item.id] = await decryptPassword(item.encryptedPassword);
-            }
             setDecryptedPasswords(decrypted);
+
+            // Data is now visible - no loading indicator needed
+
+            // OPTIMIZATION: Sync in background AFTER showing local data
+            let isSyncEnabled = false;
+            if (!options.skipSync) {
+                try {
+                    const enabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
+                    isSyncEnabled = enabled === 'true' && getCurrentUser() !== null;
+                } catch (error) {
+                    console.error('Error checking sync status:', error);
+                }
+            }
+
+            // OPTIMIZATION: Trigger completely silent background sync (no visual indicators)
+            if (!options.skipSync && isSyncEnabled) {
+                // Don't set syncing state - keep it completely invisible
+                // Don't await - let it run in background silently
+                HybridStorageService.syncToCloud()
+                    .then((syncResult) => {
+                        if (syncResult && syncResult.success) {
+                            console.log('✅ Silent background sync completed');
+                            // Silently reload passwords to show any new data from cloud
+                            loadPasswords({ silent: true, skipSync: true }).catch(err => 
+                                console.error('Error reloading after sync:', err)
+                            );
+                        } else if (syncResult && syncResult.error) {
+                            console.warn('⚠️ Background sync had issues:', syncResult.error);
+                        }
+                        // Update last sync time silently
+                        HybridStorageService.getLastSyncTime().then(lastSync => {
+                            setLastSyncTime(lastSync);
+                        }).catch(err => console.error('Error getting last sync time:', err));
+                    })
+                    .catch((syncError) => {
+                        console.error('❌ Background sync error:', syncError);
+                    });
+                // No finally block - don't update syncing state
+            } else if (!options.skipSync) {
+                // Update last sync time even if sync is disabled
+                const lastSync = await HybridStorageService.getLastSyncTime();
+                setLastSyncTime(lastSync);
+            }
         } catch (error) {
             console.error('Error loading passwords:', error);
-        } finally {
-            if (!options.silent) {
-                setLoading(false);
-            }
         }
+    };
+
+    const handleRefresh = async () => {
+        // Explicitly trigger sync and wait for it during refresh
+        await loadPasswords({ silent: false, skipSync: false });
     };
 
     const handleDelete = async (id) => {
@@ -158,8 +198,23 @@ export default function HomeScreen({ navigation }) {
         setShowPassword(prev => ({ ...prev, [id]: !prev[id] }));
     };
 
-    const toggleExpand = (id) => {
+    const toggleExpand = async (id) => {
+        const isCurrentlyExpanded = expandedCards[id];
         setExpandedCards(prev => ({ ...prev, [id]: !prev[id] }));
+        
+        // OPTIMIZATION: Decrypt password only when card is expanded (lazy loading)
+        if (!isCurrentlyExpanded && !decryptedPasswords[id]) {
+            const password = passwords.find(p => p.id === id);
+            if (password) {
+                try {
+                    const decrypted = await decryptPassword(password.encryptedPassword);
+                    setDecryptedPasswords(prev => ({ ...prev, [id]: decrypted }));
+                } catch (error) {
+                    console.error(`Error decrypting password ${id}:`, error);
+                    setDecryptedPasswords(prev => ({ ...prev, [id]: '' }));
+                }
+            }
+        }
     };
 
     const copyToClipboard = async (text, label) => {
@@ -205,9 +260,10 @@ export default function HomeScreen({ navigation }) {
     };
 
     const renderItem = ({ item }) => {
-        const displayPassword = decryptedPasswords[item.id] || '';
+        const displayPassword = decryptedPasswords[item.id];
         const isExpanded = expandedCards[item.id];
         const isUnsynced = item.cloudSynced === 0;
+        const isDecrypting = isExpanded && displayPassword === undefined;
 
         return (
             <View style={[styles.card, isUnsynced && styles.unsyncedCard]}>
@@ -264,15 +320,30 @@ export default function HomeScreen({ navigation }) {
                             <View style={styles.fieldRow}>
                                 <View style={styles.fieldContainer}>
                                     <Text style={styles.label}>PASSWORD</Text>
-                                    <Text style={styles.password}>
-                                        {showPassword[item.id] ? displayPassword : '••••••••••••'}
-                                    </Text>
+                                    {isDecrypting ? (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8 }}>
+                                            <ActivityIndicator size="small" color="#007AFF" style={{ marginRight: 8 }} />
+                                            <Text style={styles.password}>Decrypting...</Text>
+                                        </View>
+                                    ) : (
+                                        <Text style={styles.password}>
+                                            {showPassword[item.id] ? (displayPassword || '') : '••••••••••••'}
+                                        </Text>
+                                    )}
                                 </View>
                                 <View style={styles.actionsRow}>
-                                    <TouchableOpacity onPress={() => toggleVisibility(item.id)} style={styles.iconButton}>
+                                    <TouchableOpacity 
+                                        onPress={() => toggleVisibility(item.id)} 
+                                        style={styles.iconButton}
+                                        disabled={isDecrypting}
+                                    >
                                         <Text style={styles.iconText}>{showPassword[item.id] ? '👁️‍🗨️' : '👁️'}</Text>
                                     </TouchableOpacity>
-                                    <TouchableOpacity onPress={() => copyToClipboard(displayPassword, 'Password')} style={styles.iconButton}>
+                                    <TouchableOpacity 
+                                        onPress={() => copyToClipboard(displayPassword || '', 'Password')} 
+                                        style={styles.iconButton}
+                                        disabled={isDecrypting || !displayPassword}
+                                    >
                                         <Text style={styles.iconText}>📋</Text>
                                     </TouchableOpacity>
                                 </View>
@@ -336,12 +407,6 @@ export default function HomeScreen({ navigation }) {
                 </TouchableOpacity>
             )}
 
-            {syncing && (
-                <View style={styles.syncingBanner}>
-                    <ActivityIndicator size="small" color="#007AFF" />
-                    <Text style={styles.syncingText}>  Syncing...</Text>
-                </View>
-            )}
 
             {/* Search Bar */}
             <View style={styles.searchContainer}>
@@ -368,45 +433,36 @@ export default function HomeScreen({ navigation }) {
                 )}
             </View>
 
-            {
-                loading ? (
-                    <View style={styles.center}>
-                        <ActivityIndicator size="large" color="#007AFF" />
-                        <Text style={styles.loadingText}>Syncing with Google Sheets...</Text>
+            <FlatList
+                data={filteredPasswords}
+                keyExtractor={(item) => item.id ? item.id.toString() : Math.random().toString()}
+                renderItem={renderItem}
+                contentContainerStyle={[styles.listContent, { paddingBottom: 120 + insets.bottom }]}
+                refreshControl={
+                    <RefreshControl refreshing={false} onRefresh={handleRefresh} />
+                }
+                ListEmptyComponent={
+                    <View style={styles.emptyState}>
+                        {searchQuery.length > 0 ? (
+                            <>
+                                <Text style={styles.emptyText}>No passwords found</Text>
+                                <Text style={styles.emptySubText}>Try a different search term</Text>
+                                <TouchableOpacity onPress={clearSearch} style={styles.clearSearchButton}>
+                                    <Text style={styles.clearSearchButtonText}>Clear Search</Text>
+                                </TouchableOpacity>
+                            </>
+                        ) : (
+                            <>
+                                <Text style={styles.emptyText}>No passwords found.</Text>
+                                <Text style={styles.emptySubText}>Tap "Add New" in the header to add one.</Text>
+                            </>
+                        )}
                     </View>
-                ) : (
-                    <FlatList
-                        data={filteredPasswords}
-                        keyExtractor={(item) => item.id ? item.id.toString() : Math.random().toString()}
-                        renderItem={renderItem}
-                        contentContainerStyle={styles.listContent}
-                        refreshControl={
-                            <RefreshControl refreshing={loading} onRefresh={loadPasswords} />
-                        }
-                        ListEmptyComponent={
-                            <View style={styles.emptyState}>
-                                {searchQuery.length > 0 ? (
-                                    <>
-                                        <Text style={styles.emptyText}>No passwords found</Text>
-                                        <Text style={styles.emptySubText}>Try a different search term</Text>
-                                        <TouchableOpacity onPress={clearSearch} style={styles.clearSearchButton}>
-                                            <Text style={styles.clearSearchButtonText}>Clear Search</Text>
-                                        </TouchableOpacity>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Text style={styles.emptyText}>No passwords found.</Text>
-                                        <Text style={styles.emptySubText}>Tap "Add New" in the header to add one.</Text>
-                                    </>
-                                )}
-                            </View>
-                        }
-                    />
-                )
-            }
+                }
+            />
 
             <TouchableOpacity
-                style={styles.fab}
+                style={[styles.fab, { bottom: 30 + insets.bottom }]}
                 onPress={() => navigation.navigate('AddPassword')}
             >
                 <Text style={styles.fabText}>+</Text>
