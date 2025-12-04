@@ -5,7 +5,6 @@ import { encryptPassword, decryptPassword } from '../services/Encryption';
 import CustomAlert from '../components/CustomAlert';
 import { AppConfig } from '../config/AppConfig';
 import Database from '../services/Database';
-import NetInfo from '@react-native-community/netinfo';
 import * as SecureStore from 'expo-secure-store';
 import { getCurrentUser } from '../services/FirebaseAuthService';
 
@@ -86,10 +85,6 @@ export default function AddPasswordScreen({ navigation, route }) {
         try {
             const encrypted = await encryptPassword(password);
 
-            // Check connection status
-            const netState = await NetInfo.fetch();
-            const isOffline = !netState.isConnected;
-
             if (isEditMode) {
                 const result = await HybridStorageService.updatePassword(itemToEdit.id, {
                     siteName,
@@ -104,6 +99,21 @@ export default function AddPasswordScreen({ navigation, route }) {
                         title: 'Password Updated!',
                         message: 'Your password has been updated and synced to the cloud.',
                         type: 'success',
+                        buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
+                    });
+                } else if (result.isOffline) {
+                    // Check if cloud sync is enabled
+                    const cloudSyncEnabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
+                    const user = getCurrentUser();
+                    const isCloudSyncActive = cloudSyncEnabled === 'true' && user !== null;
+                    
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Updated Locally',
+                        message: isCloudSyncActive
+                            ? 'Your password has been updated on this device.\n\nIt is currently stored locally since the device doesn\'t have internet access. It will be synced when connection is available.'
+                            : 'Your password has been updated on this device.\n\nIt is stored offline only and will not be synced to the cloud. To enable cloud sync, please go to settings and sign in.',
+                        type: 'info',
                         buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
                     });
                 } else if (result.limitReached) {
@@ -140,7 +150,22 @@ export default function AddPasswordScreen({ navigation, route }) {
                     comments
                 });
 
-                if (result.warning) {
+                if (result.isOffline) {
+                    // Check if cloud sync is enabled
+                    const cloudSyncEnabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
+                    const user = getCurrentUser();
+                    const isCloudSyncActive = cloudSyncEnabled === 'true' && user !== null;
+                    
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Saved Locally',
+                        message: isCloudSyncActive
+                            ? 'Your password has been saved securely on this device.\n\nIt is currently stored locally since the device doesn\'t have internet access. It will be synced when connection is available.'
+                            : 'Your password has been saved securely on this device.\n\nIt is stored offline only and will not be synced to the cloud. To enable cloud sync, please go to settings and sign in.',
+                        type: 'info',
+                        buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
+                    });
+                } else if (result.warning) {
                     setAlertConfig({
                         visible: true,
                         title: 'Saved Locally Only',

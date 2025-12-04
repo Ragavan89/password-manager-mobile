@@ -372,6 +372,7 @@ export default function SettingsScreen({ navigation }) {
                         <TextInput
                             style={styles.pinInput}
                             placeholder="Enter 4-digit PIN"
+                            placeholderTextColor="#999"
                             value={pin}
                             onChangeText={setPin}
                             keyboardType="number-pad"
@@ -633,6 +634,7 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginBottom: 20,
         letterSpacing: 8,
+        color: '#212529',
     },
     modalButtons: {
         flexDirection: 'row',

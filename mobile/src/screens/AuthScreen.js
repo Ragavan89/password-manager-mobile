@@ -154,6 +154,7 @@ export default function AuthScreen({ navigation }) {
                         <TextInput
                             style={styles.input}
                             placeholder="Email"
+                            placeholderTextColor="#999"
                             value={email}
                             onChangeText={setEmail}
                             keyboardType="email-address"
@@ -165,6 +166,7 @@ export default function AuthScreen({ navigation }) {
                             <TextInput
                                 style={styles.passwordInput}
                                 placeholder="Password"
+                                placeholderTextColor="#999"
                                 value={password}
                                 onChangeText={setPassword}
                                 secureTextEntry={!showPassword}
@@ -192,6 +194,7 @@ export default function AuthScreen({ navigation }) {
                                 <TextInput
                                     style={styles.passwordInput}
                                     placeholder="Confirm Password"
+                                    placeholderTextColor="#999"
                                     value={confirmPassword}
                                     onChangeText={setConfirmPassword}
                                     secureTextEntry={!showConfirmPassword}
@@ -323,8 +326,8 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         padding: 15,
         fontSize: 16,
-        fontSize: 16,
         marginBottom: 15,
+        color: '#212529',
     },
     passwordContainer: {
         flexDirection: 'row',
@@ -340,6 +343,7 @@ const styles = StyleSheet.create({
         flex: 1,
         paddingVertical: 15,
         fontSize: 16,
+        color: '#212529',
     },
     eyeIcon: {
         padding: 5,

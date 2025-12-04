@@ -1,6 +1,7 @@
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getAuth, initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getFirestore, initializeFirestore } from 'firebase/firestore';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Firebase configuration
@@ -21,16 +22,33 @@ let firestore;
 if (getApps().length === 0) {
     app = initializeApp(firebaseConfig);
 
-    // Initialize Auth with AsyncStorage persistence
-    auth = initializeAuth(app, {
-        persistence: getReactNativePersistence(AsyncStorage)
-    });
+    // Initialize Auth with platform-specific persistence
+    // On web, Firebase Auth uses browser localStorage by default
+    // On native, we use AsyncStorage for persistence
+    if (Platform.OS === 'web') {
+        // Web: Use default browser persistence (localStorage)
+        auth = getAuth(app);
+    } else {
+        // Native: Use AsyncStorage for persistence
+        auth = initializeAuth(app, {
+            persistence: getReactNativePersistence(AsyncStorage)
+        });
+    }
 
     // Initialize Firestore with forced long-polling to avoid WebSocket issues
-    firestore = initializeFirestore(app, {
-        experimentalForceLongPolling: true,
-        databaseId: 'keyvault-pro-india'
-    });
+    // Note: experimentalForceLongPolling is mainly for React Native
+    if (Platform.OS === 'web') {
+        // Web: Use default Firestore initialization
+        firestore = initializeFirestore(app, {
+            databaseId: 'keyvault-pro-india'
+        });
+    } else {
+        // Native: Use long-polling to avoid WebSocket issues
+        firestore = initializeFirestore(app, {
+            experimentalForceLongPolling: true,
+            databaseId: 'keyvault-pro-india'
+        });
+    }
 } else {
     app = getApp();
     auth = getAuth(app);
@@ -38,10 +56,16 @@ if (getApps().length === 0) {
     // getFirestore(app) returns the default database, which is wrong here.
     // We try to initialize it again with the correct ID, or get the existing named instance if possible.
     try {
-        firestore = initializeFirestore(app, {
-            experimentalForceLongPolling: true,
-            databaseId: 'keyvault-pro-india'
-        });
+        if (Platform.OS === 'web') {
+            firestore = initializeFirestore(app, {
+                databaseId: 'keyvault-pro-india'
+            });
+        } else {
+            firestore = initializeFirestore(app, {
+                experimentalForceLongPolling: true,
+                databaseId: 'keyvault-pro-india'
+            });
+        }
     } catch (e) {
         // If already initialized with different settings, try to get it
         firestore = getFirestore(app, 'keyvault-pro-india');
