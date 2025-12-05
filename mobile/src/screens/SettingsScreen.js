@@ -7,7 +7,8 @@ import { verifyPIN } from '../services/Encryption';
 import { getMasterPassword } from '../services/Encryption';
 import { isMasterPasswordRequired } from '../config/EncryptionConfig';
 import { getCurrentUser, signOut } from '../services/FirebaseAuthService';
-import { syncToCloud, getLastSyncTime, getCloudPasswordLimit } from '../services/HybridStorageService';
+import { syncToCloud, getLastSyncTime, getCloudPasswordLimit, getSubscriptionTierLimits } from '../services/HybridStorageService';
+import * as FirestoreService from '../services/FirestoreService';
 import { AppConfig } from '../config/AppConfig';
 import { firestore } from '../../firebase.config';
 import CustomAlert from '../components/CustomAlert';
@@ -18,6 +19,8 @@ export default function SettingsScreen({ navigation }) {
     const [lastSyncTime, setLastSyncTime] = useState(null);
     const [syncing, setSyncing] = useState(false);
     const [cloudLimit, setCloudLimit] = useState(AppConfig.DEFAULT_CLOUD_PASSWORD_LIMIT);
+    const [subscriptionTier, setSubscriptionTier] = useState('free');
+    const [tierLimits, setTierLimits] = useState({ free: 25, tier1: 75, tier2: 150 });
     const [isLoadingSyncStatus, setIsLoadingSyncStatus] = useState(true);
 
     // View Master Password states
@@ -55,16 +58,61 @@ export default function SettingsScreen({ navigation }) {
             const enabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
             const email = await SecureStore.getItemAsync('FIREBASE_USER_EMAIL');
             const lastSync = await getLastSyncTime();
-            const limit = await getCloudPasswordLimit();
             
             // Verify user is actually authenticated (not just flag set)
             const user = getCurrentUser();
             const isActuallyEnabled = enabled === 'true' && user !== null;
 
+            // Get subscription tier if user is authenticated
+            let tier = 'free';
+            if (isActuallyEnabled && user) {
+                try {
+                    const tierResult = await FirestoreService.getUserSubscriptionTier(user.uid);
+                    if (tierResult.success) {
+                        tier = tierResult.tier || 'free';
+                    }
+                } catch (tierError) {
+                    console.error('Error fetching subscription tier:', tierError);
+                    // Try to get from cache
+                    const cachedTier = await SecureStore.getItemAsync('USER_SUBSCRIPTION_TIER');
+                    if (cachedTier) {
+                        tier = cachedTier;
+                    }
+                }
+            }
+
+            // Get cloud limit (this will use tier if subscription tiers are enabled)
+            let limit;
+            try {
+                limit = await getCloudPasswordLimit();
+            } catch (limitError) {
+                // If limit fetch fails, try cached value
+                const cachedLimit = await SecureStore.getItemAsync('CLOUD_PASSWORD_LIMIT');
+                limit = cachedLimit ? parseInt(cachedLimit, 10) : AppConfig.DEFAULT_CLOUD_PASSWORD_LIMIT;
+            }
+
+            // Get tier limits for UI display (only if cloud sync is enabled)
+            let limits = { free: 25, tier1: 75, tier2: 150 }; // Default fallback
+            if (isActuallyEnabled) {
+                try {
+                    const tierLimitsResult = await getSubscriptionTierLimits();
+                    if (tierLimitsResult.success && tierLimitsResult.tiers) {
+                        limits = tierLimitsResult.tiers;
+                        console.log('✅ Tier limits loaded:', limits);
+                    } else {
+                        console.log('⚠️ Failed to load tier limits, using defaults');
+                    }
+                } catch (tierLimitsError) {
+                    console.error('Error fetching tier limits:', tierLimitsError);
+                }
+            }
+
             setCloudSyncEnabled(isActuallyEnabled);
             setUserEmail(email || '');
             setLastSyncTime(lastSync);
             setCloudLimit(limit);
+            setSubscriptionTier(tier);
+            setTierLimits(limits);
         } catch (error) {
             console.error('Error loading cloud sync status:', error);
             // On error, verify user status synchronously as fallback
@@ -296,12 +344,6 @@ export default function SettingsScreen({ navigation }) {
                         <Text style={styles.hint}>
                             💡 Optional - app works offline without cloud sync
                         </Text>
-                        <View style={styles.limitInfoContainer}>
-                            <Text style={styles.limitInfoIcon}>ℹ️</Text>
-                            <Text style={styles.limitInfoText}>
-                                You can have free data storage for <Text style={{ fontWeight: 'bold' }}>{cloudLimit}</Text> passwords. Beyond that, you need a Pro membership.
-                            </Text>
-                        </View>
                     </View>
                 ) : (
                     <View style={styles.card}>
@@ -316,6 +358,14 @@ export default function SettingsScreen({ navigation }) {
                         <View style={styles.syncStatus}>
                             <Text style={styles.syncStatusLabel}>Last Sync:</Text>
                             <Text style={styles.syncStatusValue}>{formatSyncTime(lastSyncTime)}</Text>
+                        </View>
+                        <View style={styles.syncStatus}>
+                            <Text style={styles.syncStatusLabel}>Subscription:</Text>
+                            <Text style={[styles.syncStatusValue, styles.subscriptionTier]}>
+                                {subscriptionTier === 'tier2' ? `⭐ Tier 2 (${tierLimits.tier2} passwords)` :
+                                 subscriptionTier === 'tier1' ? `⭐ Tier 1 (${tierLimits.tier1} passwords)` :
+                                 `🆓 Free (${tierLimits.free} passwords)`}
+                            </Text>
                         </View>
 
                         <TouchableOpacity
@@ -340,11 +390,14 @@ export default function SettingsScreen({ navigation }) {
                         <View style={styles.limitInfoContainer}>
                             <Text style={styles.limitInfoIcon}>ℹ️</Text>
                             <Text style={styles.limitInfoText}>
-                                You can have free data storage for <Text style={{ fontWeight: 'bold' }}>{cloudLimit}</Text> passwords. Beyond that, you need a Pro membership.
+                                {subscriptionTier === 'free' 
+                                    ? `You can store up to ${tierLimits.free} passwords with the free tier.`
+                                    : subscriptionTier === 'tier1'
+                                    ? `You can store up to ${tierLimits.tier1} passwords with Tier 1.`
+                                    : `You can store up to ${tierLimits.tier2} passwords with Tier 2.`
+                                }
                             </Text>
                         </View>
-
-
                     </View>
                 )}
             </View>
@@ -745,6 +798,10 @@ const styles = StyleSheet.create({
         fontSize: 18,
         marginRight: 10,
         marginTop: 2,
+    },
+    subscriptionTier: {
+        fontWeight: 'bold',
+        color: '#007AFF',
     },
     limitInfoText: {
         flex: 1,

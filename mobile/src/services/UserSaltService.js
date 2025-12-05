@@ -205,6 +205,13 @@ const getUserSaltFromCloud = async (userId, requireOnline = false) => {
         const userDoc = await getDoc(userRef);
         if (!userDoc.exists()) {
             saltData.createdAt = new Date().toISOString();
+            saltData.subscriptionTier = 'free'; // Add subscriptionTier for new users
+        } else {
+            // Ensure existing users have subscriptionTier field
+            const userData = userDoc.data();
+            if (!userData.subscriptionTier) {
+                saltData.subscriptionTier = 'free';
+            }
         }
         
         console.log('💾 Saving salt to Firestore:', {
@@ -344,11 +351,24 @@ export const syncTemporarySalt = async (userId) => {
         }
 
         // Save temporary salt to Firestore
-        await setDoc(userRef, {
+        // userDoc already fetched above, reuse it
+        const saltData = {
             userSalt: tempSalt,
-            createdAt: new Date().toISOString(),
             lastUpdated: new Date().toISOString()
-        }, { merge: true });
+        };
+        
+        if (!userDoc.exists()) {
+            saltData.createdAt = new Date().toISOString();
+            saltData.subscriptionTier = 'free'; // Add subscriptionTier for new users
+        } else {
+            // Ensure existing users have subscriptionTier field
+            const userData = userDoc.data();
+            if (!userData.subscriptionTier) {
+                saltData.subscriptionTier = 'free';
+            }
+        }
+        
+        await setDoc(userRef, saltData, { merge: true });
 
         // Move from temporary to permanent storage
         await SecureStore.setItemAsync(`userSalt_${userId}`, tempSalt);

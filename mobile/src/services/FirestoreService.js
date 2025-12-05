@@ -28,12 +28,13 @@ export const savePassword = async (userId, passwordData) => {
             return { success: false, error: 'id is required' };
         }
 
-        // First, ensure the user document exists
+        // First, ensure the user document exists with default subscription tier
         const userRef = doc(firestore, 'users', userId);
 
         try {
             await setDoc(userRef, {
-                lastUpdated: new Date().toISOString()
+                lastUpdated: new Date().toISOString(),
+                subscriptionTier: 'free' // Default tier for new users
             }, { merge: true });
         } catch (userDocError) {
             console.error('❌ Failed to create user document:', userDocError);
@@ -45,13 +46,17 @@ export const savePassword = async (userId, passwordData) => {
         const passwordRef = doc(firestore, 'users', userId, 'passwords', documentId);
 
         // Remove id and localId from data - ID is stored as document ID only
-        const { id, localId, ...dataToSave } = passwordData;
+        // Map lastModified (from local DB) to lastUpdated (Firestore standard)
+        const { id, localId, lastModified, ...dataToSave } = passwordData;
+        
+        // Use lastModified if provided, otherwise use current time
+        const lastUpdated = lastModified || new Date().toISOString();
 
         try {
             await setDoc(passwordRef, {
                 ...dataToSave,
                 createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
+                lastUpdated: lastUpdated
             });
 
             console.log(`✅ Saved password with ID ${documentId} to Firestore`);
@@ -107,9 +112,14 @@ export const updatePassword = async (userId, passwordId, passwordData) => {
         }
 
         const passwordRef = doc(firestore, 'users', userId, 'passwords', passwordId);
+        
+        // Map lastModified (from local DB) to lastUpdated (Firestore standard)
+        const { lastModified, ...dataToUpdate } = passwordData;
+        const lastUpdated = lastModified || new Date().toISOString();
+        
         await updateDoc(passwordRef, {
-            ...passwordData,
-            updatedAt: new Date().toISOString()
+            ...dataToUpdate,
+            lastUpdated: lastUpdated
         });
         return { success: true };
     } catch (error) {
@@ -147,7 +157,8 @@ export const saveMasterPasswordHash = async (userId, encryptedHash) => {
         const userRef = doc(firestore, 'users', userId);
         await setDoc(userRef, {
             encryptedMasterPassword: encryptedHash,
-            updatedAt: new Date().toISOString()
+            subscriptionTier: 'free', // Ensure subscriptionTier is set
+            lastUpdated: new Date().toISOString()
         }, { merge: true });
         return { success: true };
     } catch (error) {
@@ -172,6 +183,108 @@ export const getMasterPasswordHash = async (userId) => {
     } catch (error) {
         console.error('Error getting master password:', error);
         return { success: false, error: error.message, encryptedHash: null };
+    }
+};
+
+/**
+ * Ensure user document has subscriptionTier field
+ * @param {string} userId - Firebase user ID
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+const ensureUserSubscriptionTier = async (userId) => {
+    try {
+        if (!userId) {
+            return { success: false, error: 'User ID required' };
+        }
+
+        const userRef = doc(firestore, 'users', userId);
+        const userDoc = await getDoc(userRef);
+
+        if (userDoc.exists()) {
+            const userData = userDoc.data();
+            // If subscriptionTier is missing, add it
+            if (!userData.subscriptionTier) {
+                await setDoc(userRef, {
+                    subscriptionTier: 'free',
+                    lastUpdated: new Date().toISOString()
+                }, { merge: true });
+                console.log('✅ Added subscriptionTier field to user document');
+            }
+        } else {
+            // User document doesn't exist, create it with subscriptionTier
+            await setDoc(userRef, {
+                subscriptionTier: 'free',
+                createdAt: new Date().toISOString(),
+                lastUpdated: new Date().toISOString()
+            });
+            console.log('✅ Created user document with subscriptionTier field');
+        }
+
+        return { success: true };
+    } catch (error) {
+        console.error('Error ensuring user subscription tier:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+/**
+ * Get user's subscription tier from Firestore
+ * Automatically adds subscriptionTier field if missing
+ * @param {string} userId - Firebase user ID
+ * @returns {Promise<{success: boolean, tier?: string, error?: string}>}
+ */
+export const getUserSubscriptionTier = async (userId) => {
+    try {
+        if (!userId) {
+            return { success: false, error: 'User ID required' };
+        }
+
+        // Ensure user document has subscriptionTier field
+        await ensureUserSubscriptionTier(userId);
+
+        const userRef = doc(firestore, 'users', userId);
+        const userDoc = await getDoc(userRef);
+
+        if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const tier = userData.subscriptionTier || 'free'; // Default to free if not set
+            return { success: true, tier };
+        }
+
+        // User document doesn't exist (shouldn't happen after ensureUserSubscriptionTier)
+        return { success: true, tier: 'free' };
+    } catch (error) {
+        console.error('Error getting user subscription tier:', error);
+        return { success: false, error: error.message, tier: 'free' };
+    }
+};
+
+/**
+ * Update user's subscription tier in Firestore
+ * @param {string} userId - Firebase user ID
+ * @param {string} tier - Subscription tier ('free', 'tier1', 'tier2')
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export const updateUserSubscriptionTier = async (userId, tier) => {
+    try {
+        if (!userId) {
+            return { success: false, error: 'User ID required' };
+        }
+
+        if (!['free', 'tier1', 'tier2'].includes(tier)) {
+            return { success: false, error: 'Invalid subscription tier' };
+        }
+
+        const userRef = doc(firestore, 'users', userId);
+        await setDoc(userRef, {
+            subscriptionTier: tier,
+            lastUpdated: new Date().toISOString()
+        }, { merge: true });
+
+        return { success: true };
+    } catch (error) {
+        console.error('Error updating user subscription tier:', error);
+        return { success: false, error: error.message };
     }
 };
 

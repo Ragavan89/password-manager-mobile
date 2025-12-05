@@ -10,4 +10,14 @@ export const AppConfig = {
     // Firestore config collection path
     CONFIG_COLLECTION: 'config',
     CONFIG_DOC_ID: 'limits',
+
+    // Subscription tier constants (values come from Firestore, these are just for reference)
+    SUBSCRIPTION_TIERS: {
+        FREE: 'free',
+        TIER1: 'tier1',
+        TIER2: 'tier2'
+    },
+    
+    // Default subscription tier for new users
+    DEFAULT_SUBSCRIPTION_TIER: 'free',
 };

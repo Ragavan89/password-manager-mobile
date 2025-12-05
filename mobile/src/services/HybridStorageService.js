@@ -3,7 +3,7 @@ import * as FirestoreService from './FirestoreService';
 import { getCurrentUser, signInAnonymouslyUser } from './FirebaseAuthService';
 import * as SecureStore from 'expo-secure-store';
 import { AppConfig } from '../config/AppConfig';
-import { doc, getDoc, getFirestore } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getFirestore } from 'firebase/firestore';
 import { app } from '../../firebase.config';
 import NetInfo from '@react-native-community/netinfo';
 import { syncTemporarySalt, getUserSalt } from './UserSaltService';
@@ -18,6 +18,7 @@ let syncPromise = null;
 
 /**
  * Get cloud password limit from Firestore config
+ * Supports subscription tier-based limits when feature flag is enabled
  */
 export const getCloudPasswordLimit = async () => {
     try {
@@ -28,20 +29,94 @@ export const getCloudPasswordLimit = async () => {
 
         if (configSnap.exists()) {
             const data = configSnap.data();
-            console.log('✅ Cloud limit fetched successfully:', data);
-            const limit = data.maxCloudPasswords || AppConfig.DEFAULT_CLOUD_PASSWORD_LIMIT;
+            console.log('✅ Cloud limit config fetched successfully:', data);
 
-            // Cache the limit for offline use
-            await SecureStore.setItemAsync('CLOUD_PASSWORD_LIMIT', String(limit));
-            return limit;
+            // Check if subscription tiers feature is enabled
+            const subscriptionTiersEnabled = data.subscriptionTiersEnabled === true;
+
+            // Always prefer subscriptionTiers if available (regardless of feature flag)
+            // Feature flag only controls whether different users get different limits
+            if (data.subscriptionTiers) {
+                const tiers = data.subscriptionTiers || {};
+                const freeLimit = tiers.free || 25;
+                const tier1Limit = tiers.tier1 || 75;
+                const tier2Limit = tiers.tier2 || 150;
+
+                if (subscriptionTiersEnabled) {
+                    // Subscription tier-based limits - different users get different limits
+                    const user = getCurrentUser();
+                    if (user) {
+                        try {
+                            const tierResult = await FirestoreService.getUserSubscriptionTier(user.uid);
+                            const userTier = tierResult.success ? (tierResult.tier || 'free') : 'free';
+
+                            let limit;
+                            switch (userTier) {
+                                case 'tier2':
+                                    limit = tier2Limit;
+                                    break;
+                                case 'tier1':
+                                    limit = tier1Limit;
+                                    break;
+                                case 'free':
+                                default:
+                                    limit = freeLimit;
+                                    break;
+                            }
+
+                            console.log(`✅ Using subscription tier limit: ${userTier} = ${limit}`);
+                            
+                            // Cache the limit and tier for offline use
+                            await SecureStore.setItemAsync('CLOUD_PASSWORD_LIMIT', String(limit));
+                            await SecureStore.setItemAsync('USER_SUBSCRIPTION_TIER', userTier);
+                            
+                            return limit;
+                        } catch (tierError) {
+                            console.log('⚠️ Error fetching user tier, using free tier:', tierError);
+                            // Fall through to use free tier
+                        }
+                    }
+                } else {
+                    // Feature flag disabled - use free tier limit for everyone (global limit)
+                    console.log(`✅ Using free tier limit for all users (subscription tiers disabled): ${freeLimit}`);
+                    await SecureStore.setItemAsync('CLOUD_PASSWORD_LIMIT', String(freeLimit));
+                    await SecureStore.setItemAsync('USER_SUBSCRIPTION_TIER', 'free');
+                    return freeLimit;
+                }
+
+                // No user or error fetching tier, use free tier
+                console.log('📱 Using free tier limit (default)');
+                const freeLimitValue = tiers.free || 25;
+                await SecureStore.setItemAsync('CLOUD_PASSWORD_LIMIT', String(freeLimitValue));
+                await SecureStore.setItemAsync('USER_SUBSCRIPTION_TIER', 'free');
+                return freeLimitValue;
+            } else {
+                // No subscriptionTiers defined - use legacy maxCloudPasswords as fallback
+                const limit = data.maxCloudPasswords || AppConfig.DEFAULT_CLOUD_PASSWORD_LIMIT;
+                console.log(`⚠️ No subscriptionTiers found, using maxCloudPasswords (legacy): ${limit}`);
+                
+                // Cache the limit for offline use
+                await SecureStore.setItemAsync('CLOUD_PASSWORD_LIMIT', String(limit));
+                return limit;
+            }
         }
 
-        console.log('⚠️ Config document does not exist at path:', configRef.path);
+        // Config document doesn't exist - warn user to create it
+        console.log('⚠️ Config document does not exist');
+        console.log('💡 Please run setup script: node scripts/setup-subscription-tiers.js');
+        console.log('💡 Or create config/limits document manually in Firestore');
+        
+        // Use default subscription tier values (don't auto-create)
+        const defaultFreeLimit = 25;
+        console.log(`📱 Using default free tier limit: ${defaultFreeLimit}`);
+        await SecureStore.setItemAsync('CLOUD_PASSWORD_LIMIT', String(defaultFreeLimit));
+        await SecureStore.setItemAsync('USER_SUBSCRIPTION_TIER', 'free');
+        return defaultFreeLimit;
     } catch (error) {
         console.log('❌ Error fetching cloud limit:', error);
         if (error.code === 'permission-denied') {
             console.log('🛑 Permission denied. Check Firestore Security Rules.');
-            console.log('💡 Ensure rules allow read access to "config/limits" for request.auth != null');
+            console.log('💡 Ensure rules allow read/write access to "config/limits" for request.auth != null');
         }
         console.log('❌ Error details:', error.code, error.message);
     }
@@ -57,8 +132,77 @@ export const getCloudPasswordLimit = async () => {
         console.error('Error reading cached limit:', cacheError);
     }
 
-    // Final fallback
-    return AppConfig.DEFAULT_CLOUD_PASSWORD_LIMIT;
+    // No cache available - this should only happen if Firestore is unavailable
+    // and user has never fetched config before. In this case, the savePassword
+    // function will treat it as offline and save locally.
+    throw new Error('Cannot fetch limit: Firestore unavailable and no cache');
+};
+
+/**
+ * Get subscription tier limits from Firestore config
+ * Auto-creates config document if it doesn't exist
+ * @returns {Promise<{success: boolean, tiers?: {free: number, tier1: number, tier2: number}, enabled?: boolean, error?: string}>}
+ */
+export const getSubscriptionTierLimits = async () => {
+    try {
+        const configRef = doc(firestore, AppConfig.CONFIG_COLLECTION, AppConfig.CONFIG_DOC_ID);
+        let configSnap = await getDoc(configRef);
+
+        // If config doesn't exist, return defaults (don't auto-create)
+        if (!configSnap.exists()) {
+            console.log('⚠️ Config document does not exist');
+            console.log('💡 Please run setup script: node scripts/setup-subscription-tiers.js');
+            // Return default values for UI display
+            return {
+                success: true,
+                enabled: false,
+                tiers: {
+                    free: 25,
+                    tier1: 75,
+                    tier2: 150
+                }
+            };
+        }
+
+        if (configSnap.exists()) {
+            const data = configSnap.data();
+            const subscriptionTiersEnabled = data.subscriptionTiersEnabled === true;
+
+            // Always use subscriptionTiers if available (regardless of feature flag)
+            // Feature flag only controls whether tier-based limits are enforced
+            if (data.subscriptionTiers) {
+                const tiers = data.subscriptionTiers;
+                console.log('📋 Using subscriptionTiers from config:', tiers);
+                return {
+                    success: true,
+                    enabled: subscriptionTiersEnabled,
+                    tiers: {
+                        free: tiers.free || 25,
+                        tier1: tiers.tier1 || 75,
+                        tier2: tiers.tier2 || 150
+                    }
+                };
+            }
+            
+            // No subscriptionTiers defined, use maxCloudPasswords for all
+            const defaultLimit = data.maxCloudPasswords || AppConfig.DEFAULT_CLOUD_PASSWORD_LIMIT;
+            console.log('⚠️ No subscriptionTiers found, using maxCloudPasswords for all:', defaultLimit);
+            return {
+                success: true,
+                enabled: false,
+                tiers: {
+                    free: defaultLimit,
+                    tier1: defaultLimit,
+                    tier2: defaultLimit
+                }
+            };
+        }
+
+        return { success: false, error: 'Config document does not exist' };
+    } catch (error) {
+        console.error('Error fetching subscription tier limits:', error);
+        return { success: false, error: error.message };
+    }
 };
 
 /**
@@ -111,7 +255,10 @@ export const savePassword = async (passwordData) => {
                 }
             } catch (error) {
                 // If network error occurs while checking, treat as offline
-                if (error.code === 'unavailable' || error.message?.includes('network') || error.message?.includes('timeout')) {
+                if (error.code === 'unavailable' || 
+                    error.message?.includes('network') || 
+                    error.message?.includes('timeout') ||
+                    error.message?.includes('Cannot fetch limit')) {
                     console.log('⚠️ Network error while checking cloud limit, treating as offline');
                     isOfflineMode = true;
                 } else {
@@ -256,7 +403,10 @@ export const updatePassword = async (id, passwordData) => {
                         }
                     } catch (error) {
                         // If network error occurs while checking, treat as offline
-                        if (error.code === 'unavailable' || error.message?.includes('network') || error.message?.includes('timeout')) {
+                        if (error.code === 'unavailable' || 
+                            error.message?.includes('network') || 
+                            error.message?.includes('timeout') ||
+                            error.message?.includes('Cannot fetch limit')) {
                             console.log('⚠️ Network error while checking cloud limit, treating as offline');
                             isOfflineMode = true;
                         } else {
@@ -529,7 +679,7 @@ export const syncBidirectional = async () => {
             } else {
                 // Case A: Exists in both → Compare timestamps
                 // Use lastModified from cloud if available, otherwise fallback to Firestore timestamps
-                const cloudTime = new Date(cloudPwd.lastModified || cloudPwd.updatedAt || cloudPwd.createdAt || 0);
+                const cloudTime = new Date(cloudPwd.lastModified || cloudPwd.lastUpdated || cloudPwd.updatedAt || cloudPwd.createdAt || 0);
                 const localTime = new Date(localPwd.lastModified || 0);
 
                 if (cloudTime > localTime) {
@@ -585,7 +735,21 @@ export const syncBidirectional = async () => {
         // CRITICAL: Check cloud password limit BEFORE uploading NEW local-only passwords
         // NOTE: Updates to existing cloud passwords (toUpdateCloud) are NOT blocked by limit
         // because updates don't create new documents - they modify existing ones
-        const cloudLimit = await getCloudPasswordLimit();
+        let cloudLimit;
+        try {
+            cloudLimit = await getCloudPasswordLimit();
+        } catch (limitError) {
+            // If limit fetch fails, try cached value
+            const cachedLimit = await SecureStore.getItemAsync('CLOUD_PASSWORD_LIMIT');
+            if (cachedLimit) {
+                cloudLimit = parseInt(cachedLimit, 10);
+                console.log('📱 Using cached limit for sync:', cloudLimit);
+            } else {
+                // No limit available - skip uploads but allow updates
+                console.warn('⚠️ Cannot fetch limit, skipping new uploads but allowing updates');
+                cloudLimit = 0; // Prevent new uploads
+            }
+        }
         const currentCloudCount = cloudPasswords.length;
         const availableSpace = cloudLimit - currentCloudCount;
         let uploadSkipped = false;
@@ -872,7 +1036,7 @@ export const syncFromCloud = async () => {
                 const username = cloudPassword.username || '';
                 const encryptedPassword = cloudPassword.encryptedPassword || '';
                 const comments = cloudPassword.comments || '';
-                const lastModified = cloudPassword.lastModified || cloudPassword.updatedAt || new Date().toISOString();
+                const lastModified = cloudPassword.lastModified || cloudPassword.lastUpdated || cloudPassword.updatedAt || new Date().toISOString();
 
                 const localId = cloudPassword.id; // Use UUID
                 if (localId) {
