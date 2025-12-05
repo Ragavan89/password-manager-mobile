@@ -5,7 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as HybridStorageService from '../services/HybridStorageService';
 import { decryptPassword } from '../services/Encryption';
 import * as Clipboard from 'expo-clipboard';
-import { getCurrentUser } from '../services/FirebaseAuthService';
+import { getCurrentUser, onAuthChange } from '../services/FirebaseAuthService';
 import * as SecureStore from 'expo-secure-store';
 
 export default function HomeScreen({ navigation }) {
@@ -16,27 +16,59 @@ export default function HomeScreen({ navigation }) {
     const [showPassword, setShowPassword] = useState({});
     const [expandedCards, setExpandedCards] = useState({});
     const [decryptedPasswords, setDecryptedPasswords] = useState({});
-    const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
+    const [cloudSyncEnabled, setCloudSyncEnabled] = useState(null); // null = not determined yet
     const [lastSyncTime, setLastSyncTime] = useState(null);
+    const [isAuthStateReady, setIsAuthStateReady] = useState(false);
 
-    // Load cloud sync status on mount
+    // Listen to auth state changes to update sync status
     useEffect(() => {
-        loadCloudSyncStatus();
+        let hasInitialized = false;
+
+        // Set up auth state listener to handle auth state restoration
+        // This fires immediately with current auth state, then on any changes
+        const unsubscribe = onAuthChange((user) => {
+            // Auth state is now ready (either user or null)
+            if (!hasInitialized) {
+                hasInitialized = true;
+                setIsAuthStateReady(true);
+                // Load sync status now that auth state is determined
+                loadCloudSyncStatus();
+            } else {
+                // Auth state changed after initial load - reload sync status
+                loadCloudSyncStatus();
+            }
+        });
+
+        // Cleanup listener on unmount
+        return () => {
+            if (unsubscribe) {
+                unsubscribe();
+            }
+        };
     }, []);
 
     useFocusEffect(
         useCallback(() => {
             // Load passwords without triggering sync on focus (to avoid delays)
             loadPasswords({ silent: false, skipSync: true });
-            loadCloudSyncStatus();
-        }, [])
+            // Only reload sync status if auth state is ready
+            if (isAuthStateReady) {
+                loadCloudSyncStatus();
+            }
+        }, [isAuthStateReady])
     );
 
     const loadCloudSyncStatus = async () => {
         try {
             const enabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
             const lastSync = await HybridStorageService.getLastSyncTime();
-            setCloudSyncEnabled(enabled === 'true');
+            
+            // Verify user is actually authenticated (not just flag set)
+            // This prevents the banner from flashing when user logs in
+            const user = getCurrentUser();
+            const isActuallyEnabled = enabled === 'true' && user !== null;
+            
+            setCloudSyncEnabled(isActuallyEnabled);
             setLastSyncTime(lastSync);
         } catch (error) {
             console.error('Error loading cloud sync status:', error);
@@ -263,7 +295,6 @@ export default function HomeScreen({ navigation }) {
         const displayPassword = decryptedPasswords[item.id];
         const isExpanded = expandedCards[item.id];
         const isUnsynced = item.cloudSynced === 0;
-        const isDecrypting = isExpanded && displayPassword === undefined;
 
         return (
             <View style={[styles.card, isUnsynced && styles.unsyncedCard]}>
@@ -320,29 +351,22 @@ export default function HomeScreen({ navigation }) {
                             <View style={styles.fieldRow}>
                                 <View style={styles.fieldContainer}>
                                     <Text style={styles.label}>PASSWORD</Text>
-                                    {isDecrypting ? (
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8 }}>
-                                            <ActivityIndicator size="small" color="#007AFF" style={{ marginRight: 8 }} />
-                                            <Text style={styles.password}>Decrypting...</Text>
-                                        </View>
-                                    ) : (
-                                        <Text style={styles.password}>
-                                            {showPassword[item.id] ? (displayPassword || '') : '••••••••••••'}
-                                        </Text>
-                                    )}
+                                    <Text style={styles.password}>
+                                        {showPassword[item.id] ? (displayPassword || '••••••••••••') : '••••••••••••'}
+                                    </Text>
                                 </View>
                                 <View style={styles.actionsRow}>
                                     <TouchableOpacity 
                                         onPress={() => toggleVisibility(item.id)} 
                                         style={styles.iconButton}
-                                        disabled={isDecrypting}
+                                        disabled={!displayPassword}
                                     >
                                         <Text style={styles.iconText}>{showPassword[item.id] ? '👁️‍🗨️' : '👁️'}</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity 
                                         onPress={() => copyToClipboard(displayPassword || '', 'Password')} 
                                         style={styles.iconButton}
-                                        disabled={isDecrypting || !displayPassword}
+                                        disabled={!displayPassword}
                                     >
                                         <Text style={styles.iconText}>📋</Text>
                                     </TouchableOpacity>
@@ -388,7 +412,8 @@ export default function HomeScreen({ navigation }) {
     return (
         <SafeAreaView style={styles.container}>
             {/* Sync Status Banners */}
-            {!cloudSyncEnabled && (
+            {/* Only show banner if auth state is ready AND sync is explicitly disabled (not null/undefined) */}
+            {isAuthStateReady && cloudSyncEnabled === false && (
                 <TouchableOpacity
                     style={styles.dataLossWarningBanner}
                     onPress={() => navigation.navigate('Settings')}

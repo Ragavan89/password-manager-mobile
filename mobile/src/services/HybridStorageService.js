@@ -10,6 +10,10 @@ import NetInfo from '@react-native-community/netinfo';
 // EXPLICITLY get the named database instance to ensure we aren't using default
 const firestore = getFirestore(app, 'keyvault-pro-india');
 
+// Sync lock to prevent concurrent syncs (which could cause UI freeze)
+let isSyncing = false;
+let syncPromise = null;
+
 /**
  * Get cloud password limit from Firestore config
  */
@@ -366,29 +370,53 @@ export const deletePassword = async (id) => {
  * - Deletions always proceed (free up space)
  */
 export const syncBidirectional = async () => {
-    try {
-        const cloudEnabled = await isCloudSyncEnabled();
+    // Prevent concurrent syncs - if one is already running, return the existing promise
+    if (isSyncing && syncPromise) {
+        console.log('⏸️ Sync already in progress, returning existing promise');
+        return syncPromise;
+    }
+    
+    // Mark as syncing and create the sync promise
+    isSyncing = true;
+    const SYNC_OVERALL_TIMEOUT = 30000; // 30 seconds total
+    
+    const syncOperation = Promise.race([
+        (async () => {
+            try {
+                const cloudEnabled = await isCloudSyncEnabled();
 
-        if (!cloudEnabled) {
-            return { success: false, error: 'Cloud sync not enabled' };
-        }
+                if (!cloudEnabled) {
+                    return { success: false, error: 'Cloud sync not enabled' };
+                }
 
-        const user = getCurrentUser();
+                const user = getCurrentUser();
 
-        if (!user) {
-            return { success: false, error: 'User not authenticated' };
-        }
+                if (!user) {
+                    return { success: false, error: 'User not authenticated' };
+                }
 
-        // Check network status before attempting sync
-        const netState = await NetInfo.fetch();
-        if (!netState.isConnected || !netState.isInternetReachable) {
-            return { success: false, error: 'No internet connection. Please check your network and try again.' };
-        }
+                // Check network status before attempting sync (with timeout to prevent hanging)
+                let netState;
+                try {
+                    netState = await Promise.race([
+                        NetInfo.fetch(),
+                        new Promise((_, reject) => {
+                            setTimeout(() => reject(new Error('Network check timeout')), 5000); // 5 second timeout
+                        })
+                    ]);
+                } catch (netError) {
+                    console.warn('⚠️ Network check failed or timed out:', netError.message);
+                    return { success: false, error: 'Network check failed. Please try again.' };
+                }
+                
+                if (!netState.isConnected || !netState.isInternetReachable) {
+                    return { success: false, error: 'No internet connection. Please check your network and try again.' };
+                }
 
-        console.log('🔄 Starting bidirectional sync...');
+                console.log('🔄 Starting bidirectional sync...');
 
-        // Step 1: Fetch both datasets
-        const localPasswords = Database.getPasswords();
+                // Step 1: Fetch both datasets
+                const localPasswords = Database.getPasswords();
         const tombstones = Database.getDeletedPasswords(); // Get deleted passwords (tombstones)
 
         // DEBUG: Log local passwords with their IDs
@@ -728,10 +756,32 @@ export const syncBidirectional = async () => {
                     ? `Synced ${totalSynced} passwords with ${errorCount} errors`
                     : `Successfully synced ${totalSynced} passwords`)
         };
-    } catch (error) {
-        console.error('❌ Error in syncBidirectional:', error);
-        return { success: false, error: error.message };
-    }
+            } catch (error) {
+                console.error('❌ Error in syncBidirectional:', error);
+                
+                // Handle timeout specifically
+                if (error.message?.includes('timed out')) {
+                    console.warn('⏰ Sync operation timed out - likely network issue after idle');
+                    return { success: false, error: 'Sync timed out. Please check your network connection.' };
+                }
+                
+                return { success: false, error: error.message };
+            }
+        })(),
+        new Promise((_, reject) => {
+            setTimeout(() => {
+                reject(new Error(`Sync operation timed out after ${SYNC_OVERALL_TIMEOUT}ms`));
+            }, SYNC_OVERALL_TIMEOUT);
+        })
+    ]).finally(() => {
+        // Always clear sync lock when done (success, error, or timeout)
+        isSyncing = false;
+        syncPromise = null;
+    });
+    
+    // Store the promise so concurrent calls can return it
+    syncPromise = syncOperation;
+    return syncOperation;
 };
 
 /**
