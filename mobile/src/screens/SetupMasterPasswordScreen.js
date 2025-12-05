@@ -16,6 +16,9 @@ import * as Clipboard from 'expo-clipboard';
 import { isMasterPasswordRequired } from '../config/EncryptionConfig';
 import { validateMasterPasswordStrength } from '../services/AuthService';
 import { setupMasterPassword } from '../services/Encryption';
+import * as SecureStore from 'expo-secure-store';
+import { getCurrentUser } from '../services/FirebaseAuthService';
+import NetInfo from '@react-native-community/netinfo';
 
 export default function SetupMasterPasswordScreen({ navigation }) {
     const [masterPassword, setMasterPassword] = useState('');
@@ -24,6 +27,8 @@ export default function SetupMasterPasswordScreen({ navigation }) {
     const [passwordStrength, setPasswordStrength] = useState({ valid: false, strength: 'none', message: '' });
     const [showBackupScreen, setShowBackupScreen] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [isCloudSyncEnabled, setIsCloudSyncEnabled] = useState(false);
+    const [isOnline, setIsOnline] = useState(true);
 
     // Check if master password is required
     useEffect(() => {
@@ -31,6 +36,23 @@ export default function SetupMasterPasswordScreen({ navigation }) {
             // Skip this screen in APP_SECRET_ONLY mode
             navigation.replace('Home');
         }
+    }, []);
+
+    // Check cloud sync status and network connectivity
+    useEffect(() => {
+        const checkStatus = async () => {
+            try {
+                const cloudEnabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
+                const user = getCurrentUser();
+                setIsCloudSyncEnabled(cloudEnabled === 'true' && user !== null);
+
+                const netState = await NetInfo.fetch();
+                setIsOnline(netState.isConnected && netState.isInternetReachable);
+            } catch (error) {
+                console.error('Error checking status:', error);
+            }
+        };
+        checkStatus();
     }, []);
 
     // Validate password strength as user types
@@ -72,12 +94,38 @@ export default function SetupMasterPasswordScreen({ navigation }) {
         // Allow UI to update before blocking with encryption
         setTimeout(async () => {
             try {
+                // For cloud sync users, require online connection on first setup
+                // This ensures salt can be fetched/synced properly
+                const requireOnline = isCloudSyncEnabled;
+                
+                // Double-check network status
+                if (requireOnline) {
+                    const netState = await NetInfo.fetch();
+                    if (!netState.isConnected || !netState.isInternetReachable) {
+                        Alert.alert(
+                            'Internet Required',
+                            'An internet connection is required for first-time setup with cloud sync. Please connect to the internet and try again.',
+                            [{ text: 'OK', onPress: () => setIsSaving(false) }]
+                        );
+                        return;
+                    }
+                }
+
                 // Save the master password
-                const result = await setupMasterPassword(masterPassword);
+                const result = await setupMasterPassword(masterPassword, requireOnline);
 
                 if (result.success) {
-                    // Master password saved! Go to home
-                    navigation.replace('Home');
+                    // Show warning if using temporary salt
+                    if (result.isTemporarySalt) {
+                        Alert.alert(
+                            'Setup Complete (Offline Mode)',
+                            'Your master password has been set up. However, your encryption salt is temporary and will be synced to the cloud when you connect to the internet. Your data is safe and will work normally.',
+                            [{ text: 'OK', onPress: () => navigation.replace('Home') }]
+                        );
+                    } else {
+                        // Master password saved! Go to home
+                        navigation.replace('Home');
+                    }
                 } else {
                     Alert.alert('Error', result.error || 'Failed to save master password. Please try again.');
                     setIsSaving(false);
@@ -199,6 +247,16 @@ export default function SetupMasterPasswordScreen({ navigation }) {
                         </Text>
                     </View>
 
+                    {isCloudSyncEnabled && !isOnline && (
+                        <View style={styles.errorBox}>
+                            <Text style={styles.errorIcon}>⚠️</Text>
+                            <Text style={styles.errorTitle}>Internet Connection Required</Text>
+                            <Text style={styles.errorText}>
+                                Cloud sync is enabled. An internet connection is required for first-time setup to sync your encryption salt. Please connect to the internet and try again.
+                            </Text>
+                        </View>
+                    )}
+
                     <View style={styles.warningBox}>
                         <Text style={styles.warningIcon}>⚠️</Text>
                         <Text style={styles.warningTitle}>Restoring from Cloud?</Text>
@@ -277,10 +335,10 @@ export default function SetupMasterPasswordScreen({ navigation }) {
                     <TouchableOpacity
                         style={[
                             styles.button,
-                            (!passwordStrength.valid || !confirmPassword) && styles.buttonDisabled
+                            (!passwordStrength.valid || !confirmPassword || (isCloudSyncEnabled && !isOnline)) && styles.buttonDisabled
                         ]}
                         onPress={handleContinue}
-                        disabled={!passwordStrength.valid || !confirmPassword}
+                        disabled={!passwordStrength.valid || !confirmPassword || (isCloudSyncEnabled && !isOnline)}
                     >
                         <Text style={styles.buttonText}>Continue</Text>
                     </TouchableOpacity>
@@ -557,5 +615,28 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 18,
         fontWeight: 'bold',
+    },
+    errorBox: {
+        backgroundColor: '#f8d7da',
+        padding: 16,
+        borderRadius: 12,
+        marginBottom: 16,
+        borderLeftWidth: 4,
+        borderLeftColor: '#dc3545',
+    },
+    errorIcon: {
+        fontSize: 24,
+        marginBottom: 8,
+    },
+    errorTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#721c24',
+        marginBottom: 8,
+    },
+    errorText: {
+        fontSize: 14,
+        color: '#721c24',
+        lineHeight: 20,
     },
 });

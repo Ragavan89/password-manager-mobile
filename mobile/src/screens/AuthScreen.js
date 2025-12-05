@@ -121,13 +121,28 @@ export default function AuthScreen({ navigation }) {
         } else {
             // Save user email for cloud sync
             await SecureStore.setItemAsync('FIREBASE_USER_EMAIL', email);
+            
+            // Check if we need to migrate from local salt to cloud salt
+            // This handles the case where user created entries before enabling cloud sync
+            const { migrateLocalToCloudSalt } = await import('../services/SaltMigrationService');
+            const migrationResult = await migrateLocalToCloudSalt();
+            
+            // Enable cloud sync after migration check
             await SecureStore.setItemAsync('CLOUD_SYNC_ENABLED', 'true');
 
-            Alert.alert(
-                'Success',
-                'Cloud sync enabled! Your passwords will now be backed up to the cloud.',
-                [{ text: 'OK', onPress: () => navigation.goBack() }]
-            );
+            if (migrationResult.migrated) {
+                Alert.alert(
+                    'Cloud Sync Enabled',
+                    `Cloud sync enabled! Migrated ${migrationResult.reEncryptedCount || 0} local passwords to use cloud encryption.`,
+                    [{ text: 'OK', onPress: () => navigation.goBack() }]
+                );
+            } else {
+                Alert.alert(
+                    'Success',
+                    'Cloud sync enabled! Your passwords will now be backed up to the cloud.',
+                    [{ text: 'OK', onPress: () => navigation.goBack() }]
+                );
+            }
         }
     };
 

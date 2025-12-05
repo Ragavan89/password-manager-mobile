@@ -6,6 +6,8 @@ import { AppConfig } from '../config/AppConfig';
 import { doc, getDoc, getFirestore } from 'firebase/firestore';
 import { app } from '../../firebase.config';
 import NetInfo from '@react-native-community/netinfo';
+import { syncTemporarySalt, getUserSalt } from './UserSaltService';
+import { reEncryptAllPasswords } from './Encryption';
 
 // EXPLICITLY get the named database instance to ensure we aren't using default
 const firestore = getFirestore(app, 'keyvault-pro-india');
@@ -414,6 +416,58 @@ export const syncBidirectional = async () => {
                 }
 
                 console.log('🔄 Starting bidirectional sync...');
+
+                // Step 0: Ensure salt exists in Firestore and handle salt migrations
+                // This ensures salt is created even if master password was set up before salt implementation
+                try {
+                    // Sync temporary salt if it exists (for offline-first setup)
+                    const saltSyncResult = await syncTemporarySalt(user.uid);
+                    
+                    // If salt conflict detected, re-encrypt local entries
+                    if (saltSyncResult && saltSyncResult.requiresReEncryption) {
+                        console.log('🔄 Salt conflict detected, re-encrypting local entries...');
+                        const reEncryptResult = await reEncryptAllPasswords(user.uid);
+                        
+                        if (reEncryptResult.success) {
+                            console.log(`✅ Re-encrypted ${reEncryptResult.reEncryptedCount} local passwords with cloud salt`);
+                            if (reEncryptResult.failedCount > 0) {
+                                console.warn(`⚠️ ${reEncryptResult.failedCount} passwords could not be re-encrypted`);
+                            }
+                        } else {
+                            console.error('❌ Failed to re-encrypt passwords:', reEncryptResult.error);
+                            // Continue with sync - some entries might still work
+                        }
+                    }
+                    
+                    // Check for local-to-cloud salt migration (when user enables cloud sync after creating local entries)
+                    const { migrateLocalToCloudSalt } = await import('./SaltMigrationService');
+                    const migrationResult = await migrateLocalToCloudSalt();
+                    if (migrationResult.migrated) {
+                        console.log(`✅ Migrated ${migrationResult.reEncryptedCount || 0} local passwords to cloud salt`);
+                    }
+                    
+                    // Ensure salt exists in Firestore (auto-create if missing)
+                    // This handles cases where master password was set up before salt implementation
+                    // or if salt was never created for any reason
+                    // Always check and create salt during sync to ensure it's in Firestore
+                    try {
+                        const saltCheck = await getUserSalt(false);
+                        if (!saltCheck.success) {
+                            console.log('⚠️ Salt check failed, will retry...');
+                        } else if (saltCheck.isTemporary) {
+                            console.log('⚠️ Salt is temporary, will be synced...');
+                        } else {
+                            console.log('✅ Salt exists in Firestore');
+                        }
+                        // getUserSalt() automatically creates salt in Firestore if missing
+                        // This ensures salt is always created during sync operations
+                    } catch (saltCheckError) {
+                        console.warn('⚠️ Salt check error (non-critical):', saltCheckError);
+                    }
+                } catch (saltError) {
+                    console.warn('⚠️ Failed to ensure salt exists (non-critical):', saltError);
+                    // Don't fail the entire sync if salt check fails
+                }
 
                 // Step 1: Fetch both datasets
                 const localPasswords = Database.getPasswords();
