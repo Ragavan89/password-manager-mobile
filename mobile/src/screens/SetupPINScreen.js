@@ -1,6 +1,5 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { setupPIN } from '../services/Encryption';
 
 export default function SetupPINScreen({ navigation }) {
@@ -63,7 +62,7 @@ export default function SetupPINScreen({ navigation }) {
     const setCurrentPin = step === 1 ? setPin : setConfirmPin;
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={styles.keyboardView}
@@ -149,7 +148,7 @@ export default function SetupPINScreen({ navigation }) {
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
-        </SafeAreaView>
+        </View>
     );
 }
 

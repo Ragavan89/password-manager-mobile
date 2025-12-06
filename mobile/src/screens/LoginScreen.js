@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, TextInput, Text, TouchableOpacity, StyleSheet, Alert, SafeAreaView, KeyboardAvoidingView, Platform, Modal, ScrollView, ActivityIndicator } from 'react-native';
+import { View, TextInput, Text, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, Modal, ScrollView, ActivityIndicator } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import CustomAlert from '../components/CustomAlert';
 import { isMasterPasswordSet, isPINSet, verifyPIN } from '../services/Encryption';
@@ -147,7 +147,7 @@ export default function LoginScreen({ navigation }) {
         try {
             // Save the new PIN securely
             const result = await setupPin(newPin);
-            
+
             if (result.success) {
                 Alert.alert(
                     'Success! ✅',
@@ -183,7 +183,7 @@ export default function LoginScreen({ navigation }) {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.content}
@@ -349,7 +349,7 @@ export default function LoginScreen({ navigation }) {
                 buttons={alertConfig.buttons}
                 onClose={() => setAlertConfig({ ...alertConfig, visible: false })}
             />
-        </SafeAreaView>
+        </View>
     );
 }
 

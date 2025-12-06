@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, Alert, ScrollView, TouchableOpacity, Modal, ActivityIndicator, TextInput, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import * as Clipboard from 'expo-clipboard';
 import { verifyPIN } from '../services/Encryption';
@@ -58,7 +57,7 @@ export default function SettingsScreen({ navigation }) {
             const enabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
             const email = await SecureStore.getItemAsync('FIREBASE_USER_EMAIL');
             const lastSync = await getLastSyncTime();
-            
+
             // Verify user is actually authenticated (not just flag set)
             const user = getCurrentUser();
             const isActuallyEnabled = enabled === 'true' && user !== null;
@@ -167,8 +166,9 @@ export default function SettingsScreen({ navigation }) {
                 const details = [];
                 if (result.uploaded > 0) details.push(`⬆️ Uploaded ${result.uploaded} new item${result.uploaded > 1 ? 's' : ''} to the cloud storage`);
                 if (result.downloaded > 0) details.push(`⬇️ Downloaded ${result.downloaded} new item${result.downloaded > 1 ? 's' : ''} from the cloud storage`);
-                if (result.updatedLocal > 0) details.push(`🔄 Updated ${result.updatedLocal} item${result.updatedLocal > 1 ? 's' : ''} on this device local storage`);
-                if (result.updatedCloud > 0) details.push(`☁️ Updated ${result.updatedCloud} item${result.updatedCloud > 1 ? 's' : ''} in the cloud storage`);
+                // Suppress local/cloud update counts to keep UI simple
+                // if (result.updatedLocal > 0) details.push(`🔄 Updated ${result.updatedLocal} item${result.updatedLocal > 1 ? 's' : ''} on this device local storage`);
+                // if (result.updatedCloud > 0) details.push(`☁️ Updated ${result.updatedCloud} item${result.updatedCloud > 1 ? 's' : ''} in the cloud storage`);
 
                 const message = details.length > 0
                     ? `Sync successful!\n\n${details.join('\n')}`
@@ -314,204 +314,204 @@ export default function SettingsScreen({ navigation }) {
     };
 
     return (
-        <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-            <ScrollView 
+        <View style={styles.safeArea}>
+            <ScrollView
                 style={styles.container}
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={true}
             >
                 {/* Cloud Sync Section */}
                 <View style={styles.section}>
-                <Text style={styles.sectionTitle}>☁️ Cloud Sync</Text>
+                    <Text style={styles.sectionTitle}>☁️ Cloud Sync</Text>
 
-                {isLoadingSyncStatus ? (
-                    <View style={styles.card}>
-                        <ActivityIndicator size="small" color="#007AFF" style={{ marginVertical: 20 }} />
-                        <Text style={[styles.cardDescription, { textAlign: 'center' }]}>Loading sync status...</Text>
-                    </View>
-                ) : !cloudSyncEnabled ? (
-                    <View style={styles.card}>
-                        <Text style={styles.cardTitle}>Backup to Cloud</Text>
-                        <Text style={styles.cardDescription}>
-                            Enable cloud sync to backup your passwords and access them across devices.
-                        </Text>
-                        <TouchableOpacity
-                            style={styles.primaryButton}
-                            onPress={handleEnableCloudSync}
-                        >
-                            <Text style={styles.primaryButtonText}>Enable Cloud Sync</Text>
-                        </TouchableOpacity>
-                        <Text style={styles.hint}>
-                            💡 Optional - app works offline without cloud sync
-                        </Text>
-                    </View>
-                ) : (
-                    <View style={styles.card}>
-                        <View style={styles.syncStatus}>
-                            <Text style={styles.syncStatusLabel}>Status:</Text>
-                            <Text style={styles.syncStatusValue}>✅ Enabled</Text>
-                        </View>
-                        <View style={styles.syncStatus}>
-                            <Text style={styles.syncStatusLabel}>Account:</Text>
-                            <Text style={styles.syncStatusValue}>{userEmail}</Text>
-                        </View>
-                        <View style={styles.syncStatus}>
-                            <Text style={styles.syncStatusLabel}>Last Sync:</Text>
-                            <Text style={styles.syncStatusValue}>{formatSyncTime(lastSyncTime)}</Text>
-                        </View>
-                        <View style={styles.syncStatus}>
-                            <Text style={styles.syncStatusLabel}>Subscription:</Text>
-                            <Text style={[styles.syncStatusValue, styles.subscriptionTier]}>
-                                {subscriptionTier === 'tier2' ? `⭐ Tier 2 (${tierLimits.tier2} passwords)` :
-                                 subscriptionTier === 'tier1' ? `⭐ Tier 1 (${tierLimits.tier1} passwords)` :
-                                 `🆓 Free (${tierLimits.free} passwords)`}
-                            </Text>
-                        </View>
-
-                        <TouchableOpacity
-                            style={[styles.secondaryButton, syncing && styles.buttonDisabled]}
-                            onPress={handleSyncNow}
-                            disabled={syncing}
-                        >
-                            {syncing ? (
-                                <ActivityIndicator color="#007AFF" />
-                            ) : (
-                                <Text style={styles.secondaryButtonText}>🔄 Sync Now</Text>
-                            )}
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.dangerButton}
-                            onPress={handleDisableCloudSync}
-                        >
-                            <Text style={styles.dangerButtonText}>Sign Out</Text>
-                        </TouchableOpacity>
-
-                        <View style={styles.limitInfoContainer}>
-                            <Text style={styles.limitInfoIcon}>ℹ️</Text>
-                            <Text style={styles.limitInfoText}>
-                                {subscriptionTier === 'free' 
-                                    ? `You can store up to ${tierLimits.free} passwords with the free tier.`
-                                    : subscriptionTier === 'tier1'
-                                    ? `You can store up to ${tierLimits.tier1} passwords with Tier 1.`
-                                    : `You can store up to ${tierLimits.tier2} passwords with Tier 2.`
-                                }
-                            </Text>
-                        </View>
-                    </View>
-                )}
-            </View>
-
-            {/* Master Password Section */}
-            {
-                isMasterPasswordRequired() && (
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>🔑 Master Password</Text>
+                    {isLoadingSyncStatus ? (
                         <View style={styles.card}>
+                            <ActivityIndicator size="small" color="#007AFF" style={{ marginVertical: 20 }} />
+                            <Text style={[styles.cardDescription, { textAlign: 'center' }]}>Loading sync status...</Text>
+                        </View>
+                    ) : !cloudSyncEnabled ? (
+                        <View style={styles.card}>
+                            <Text style={styles.cardTitle}>Backup to Cloud</Text>
                             <Text style={styles.cardDescription}>
-                                View your master password to set up the app on a new device.
+                                Enable cloud sync to backup your passwords and access them across devices.
                             </Text>
                             <TouchableOpacity
-                                style={styles.secondaryButton}
-                                onPress={handleViewMasterPassword}
+                                style={styles.primaryButton}
+                                onPress={handleEnableCloudSync}
                             >
-                                <Text style={styles.secondaryButtonText}>👁️ View Master Password</Text>
+                                <Text style={styles.primaryButtonText}>Enable Cloud Sync</Text>
                             </TouchableOpacity>
+                            <Text style={styles.hint}>
+                                💡 Optional - app works offline without cloud sync
+                            </Text>
                         </View>
-                    </View>
-                )
-            }
-
-            {/* Security Note */}
-            <View style={styles.securityNote}>
-                <Text style={styles.securityIcon}>🔒</Text>
-                <Text style={styles.securityText}>
-                    Your passwords are encrypted with AES-256. Only you can decrypt them.
-                </Text>
-            </View>
-
-            {/* PIN Verification Modal */}
-            <Modal
-                visible={showPinModal}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={handleClosePinModal}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Enter Your PIN</Text>
-                        <Text style={styles.modalDescription}>
-                            Verify your identity to view the master password
-                        </Text>
-
-                        <TextInput
-                            style={styles.pinInput}
-                            placeholder="Enter 4-digit PIN"
-                            placeholderTextColor="#999"
-                            value={pin}
-                            onChangeText={setPin}
-                            keyboardType="number-pad"
-                            maxLength={4}
-                            secureTextEntry
-                            autoFocus
-                        />
-
-                        <View style={styles.modalButtons}>
-                            <TouchableOpacity
-                                style={[styles.modalButton, styles.cancelButton]}
-                                onPress={handleClosePinModal}
-                            >
-                                <Text style={styles.cancelButtonText}>Cancel</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[styles.modalButton, styles.verifyButton]}
-                                onPress={handleVerifyPin}
-                                disabled={isLoading}
-                            >
-                                <Text style={styles.verifyButtonText}>
-                                    {isLoading ? 'Verifying...' : 'Verify'}
+                    ) : (
+                        <View style={styles.card}>
+                            <View style={styles.syncStatus}>
+                                <Text style={styles.syncStatusLabel}>Status:</Text>
+                                <Text style={styles.syncStatusValue}>✅ Enabled</Text>
+                            </View>
+                            <View style={styles.syncStatus}>
+                                <Text style={styles.syncStatusLabel}>Account:</Text>
+                                <Text style={styles.syncStatusValue}>{userEmail}</Text>
+                            </View>
+                            <View style={styles.syncStatus}>
+                                <Text style={styles.syncStatusLabel}>Last Sync:</Text>
+                                <Text style={styles.syncStatusValue}>{formatSyncTime(lastSyncTime)}</Text>
+                            </View>
+                            <View style={styles.syncStatus}>
+                                <Text style={styles.syncStatusLabel}>Subscription:</Text>
+                                <Text style={[styles.syncStatusValue, styles.subscriptionTier]}>
+                                    {subscriptionTier === 'tier2' ? `⭐ Tier 2 (${tierLimits.tier2} passwords)` :
+                                        subscriptionTier === 'tier1' ? `⭐ Tier 1 (${tierLimits.tier1} passwords)` :
+                                            `🆓 Free (${tierLimits.free} passwords)`}
                                 </Text>
+                            </View>
+
+                            <TouchableOpacity
+                                style={[styles.secondaryButton, syncing && styles.buttonDisabled]}
+                                onPress={handleSyncNow}
+                                disabled={syncing}
+                            >
+                                {syncing ? (
+                                    <ActivityIndicator color="#007AFF" />
+                                ) : (
+                                    <Text style={styles.secondaryButtonText}>🔄 Sync Now</Text>
+                                )}
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.dangerButton}
+                                onPress={handleDisableCloudSync}
+                            >
+                                <Text style={styles.dangerButtonText}>Sign Out</Text>
+                            </TouchableOpacity>
+
+                            <View style={styles.limitInfoContainer}>
+                                <Text style={styles.limitInfoIcon}>ℹ️</Text>
+                                <Text style={styles.limitInfoText}>
+                                    {subscriptionTier === 'free'
+                                        ? `You can store up to ${tierLimits.free} passwords with the free tier.`
+                                        : subscriptionTier === 'tier1'
+                                            ? `You can store up to ${tierLimits.tier1} passwords with Tier 1.`
+                                            : `You can store up to ${tierLimits.tier2} passwords with Tier 2.`
+                                    }
+                                </Text>
+                            </View>
+                        </View>
+                    )}
+                </View>
+
+                {/* Master Password Section */}
+                {
+                    isMasterPasswordRequired() && (
+                        <View style={styles.section}>
+                            <Text style={styles.sectionTitle}>🔑 Master Password</Text>
+                            <View style={styles.card}>
+                                <Text style={styles.cardDescription}>
+                                    View your master password to set up the app on a new device.
+                                </Text>
+                                <TouchableOpacity
+                                    style={styles.secondaryButton}
+                                    onPress={handleViewMasterPassword}
+                                >
+                                    <Text style={styles.secondaryButtonText}>👁️ View Master Password</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    )
+                }
+
+                {/* Security Note */}
+                <View style={styles.securityNote}>
+                    <Text style={styles.securityIcon}>🔒</Text>
+                    <Text style={styles.securityText}>
+                        Your passwords are encrypted with AES-256. Only you can decrypt them.
+                    </Text>
+                </View>
+
+                {/* PIN Verification Modal */}
+                <Modal
+                    visible={showPinModal}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={handleClosePinModal}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalTitle}>Enter Your PIN</Text>
+                            <Text style={styles.modalDescription}>
+                                Verify your identity to view the master password
+                            </Text>
+
+                            <TextInput
+                                style={styles.pinInput}
+                                placeholder="Enter 4-digit PIN"
+                                placeholderTextColor="#999"
+                                value={pin}
+                                onChangeText={setPin}
+                                keyboardType="number-pad"
+                                maxLength={4}
+                                secureTextEntry
+                                autoFocus
+                            />
+
+                            <View style={styles.modalButtons}>
+                                <TouchableOpacity
+                                    style={[styles.modalButton, styles.cancelButton]}
+                                    onPress={handleClosePinModal}
+                                >
+                                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[styles.modalButton, styles.verifyButton]}
+                                    onPress={handleVerifyPin}
+                                    disabled={isLoading}
+                                >
+                                    <Text style={styles.verifyButtonText}>
+                                        {isLoading ? 'Verifying...' : 'Verify'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* Master Password Display Modal */}
+                <Modal
+                    visible={showMasterPassword}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={handleCloseMasterPasswordModal}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalTitle}>Your Master Password</Text>
+                            <Text style={styles.modalWarning}>
+                                ⚠️ Keep this safe! You'll need it to set up the app on a new device.
+                            </Text>
+
+                            <View style={styles.passwordDisplay}>
+                                <Text style={styles.passwordText}>{masterPassword}</Text>
+                            </View>
+
+                            <TouchableOpacity
+                                style={styles.copyButton}
+                                onPress={handleCopyMasterPassword}
+                            >
+                                <Text style={styles.copyButtonText}>📋 Copy to Clipboard</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.closeButton}
+                                onPress={handleCloseMasterPasswordModal}
+                            >
+                                <Text style={styles.closeButtonText}>Close</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
-                </View>
-            </Modal>
-
-            {/* Master Password Display Modal */}
-            <Modal
-                visible={showMasterPassword}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={handleCloseMasterPasswordModal}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Your Master Password</Text>
-                        <Text style={styles.modalWarning}>
-                            ⚠️ Keep this safe! You'll need it to set up the app on a new device.
-                        </Text>
-
-                        <View style={styles.passwordDisplay}>
-                            <Text style={styles.passwordText}>{masterPassword}</Text>
-                        </View>
-
-                        <TouchableOpacity
-                            style={styles.copyButton}
-                            onPress={handleCopyMasterPassword}
-                        >
-                            <Text style={styles.copyButtonText}>📋 Copy to Clipboard</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.closeButton}
-                            onPress={handleCloseMasterPasswordModal}
-                        >
-                            <Text style={styles.closeButtonText}>Close</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
+                </Modal>
 
                 {/* Custom Alert for Sync Messages */}
                 <CustomAlert
@@ -524,7 +524,7 @@ export default function SettingsScreen({ navigation }) {
                     onClose={() => setAlertConfig({ ...alertConfig, visible: false })}
                 />
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 }
 

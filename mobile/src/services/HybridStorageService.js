@@ -6,7 +6,14 @@ import { AppConfig } from '../config/AppConfig';
 import { doc, getDoc, setDoc, getFirestore } from 'firebase/firestore';
 import { app } from '../../firebase.config';
 import NetInfo from '@react-native-community/netinfo';
-import { syncTemporarySalt, getUserSalt } from './UserSaltService';
+import {
+    getUserSalt,
+    syncTemporarySalt,
+    verifySaltIntegrity,
+    isSaltMigrationRequired,
+    getMigrationSalts,
+    clearSaltMigrationFlags
+} from './UserSaltService';
 import { reEncryptAllPasswords } from './Encryption';
 
 // EXPLICITLY get the named database instance to ensure we aren't using default
@@ -65,11 +72,11 @@ export const getCloudPasswordLimit = async () => {
                             }
 
                             console.log(`✅ Using subscription tier limit: ${userTier} = ${limit}`);
-                            
+
                             // Cache the limit and tier for offline use
                             await SecureStore.setItemAsync('CLOUD_PASSWORD_LIMIT', String(limit));
                             await SecureStore.setItemAsync('USER_SUBSCRIPTION_TIER', userTier);
-                            
+
                             return limit;
                         } catch (tierError) {
                             console.log('⚠️ Error fetching user tier, using free tier:', tierError);
@@ -94,7 +101,7 @@ export const getCloudPasswordLimit = async () => {
                 // No subscriptionTiers defined - use legacy maxCloudPasswords as fallback
                 const limit = data.maxCloudPasswords || AppConfig.DEFAULT_CLOUD_PASSWORD_LIMIT;
                 console.log(`⚠️ No subscriptionTiers found, using maxCloudPasswords (legacy): ${limit}`);
-                
+
                 // Cache the limit for offline use
                 await SecureStore.setItemAsync('CLOUD_PASSWORD_LIMIT', String(limit));
                 return limit;
@@ -105,7 +112,7 @@ export const getCloudPasswordLimit = async () => {
         console.log('⚠️ Config document does not exist');
         console.log('💡 Please run setup script: node scripts/setup-subscription-tiers.js');
         console.log('💡 Or create config/limits document manually in Firestore');
-        
+
         // Use default subscription tier values (don't auto-create)
         const defaultFreeLimit = 25;
         console.log(`📱 Using default free tier limit: ${defaultFreeLimit}`);
@@ -183,7 +190,7 @@ export const getSubscriptionTierLimits = async () => {
                     }
                 };
             }
-            
+
             // No subscriptionTiers defined, use maxCloudPasswords for all
             const defaultLimit = data.maxCloudPasswords || AppConfig.DEFAULT_CLOUD_PASSWORD_LIMIT;
             console.log('⚠️ No subscriptionTiers found, using maxCloudPasswords for all:', defaultLimit);
@@ -255,8 +262,8 @@ export const savePassword = async (passwordData) => {
                 }
             } catch (error) {
                 // If network error occurs while checking, treat as offline
-                if (error.code === 'unavailable' || 
-                    error.message?.includes('network') || 
+                if (error.code === 'unavailable' ||
+                    error.message?.includes('network') ||
                     error.message?.includes('timeout') ||
                     error.message?.includes('Cannot fetch limit')) {
                     console.log('⚠️ Network error while checking cloud limit, treating as offline');
@@ -403,8 +410,8 @@ export const updatePassword = async (id, passwordData) => {
                         }
                     } catch (error) {
                         // If network error occurs while checking, treat as offline
-                        if (error.code === 'unavailable' || 
-                            error.message?.includes('network') || 
+                        if (error.code === 'unavailable' ||
+                            error.message?.includes('network') ||
                             error.message?.includes('timeout') ||
                             error.message?.includes('Cannot fetch limit')) {
                             console.log('⚠️ Network error while checking cloud limit, treating as offline');
@@ -527,11 +534,11 @@ export const syncBidirectional = async () => {
         console.log('⏸️ Sync already in progress, returning existing promise');
         return syncPromise;
     }
-    
+
     // Mark as syncing and create the sync promise
     isSyncing = true;
     const SYNC_OVERALL_TIMEOUT = 30000; // 30 seconds total
-    
+
     const syncOperation = Promise.race([
         (async () => {
             try {
@@ -560,26 +567,26 @@ export const syncBidirectional = async () => {
                     console.warn('⚠️ Network check failed or timed out:', netError.message);
                     return { success: false, error: 'Network check failed. Please try again.' };
                 }
-                
+
                 if (!netState.isConnected || !netState.isInternetReachable) {
                     return { success: false, error: 'No internet connection. Please check your network and try again.' };
                 }
 
                 console.log('🔄 Starting bidirectional sync...');
 
-                // Step 0: Ensure salt exists in Firestore and handle salt migrations
-                // This ensures salt is created even if master password was set up before salt implementation
+                // Step 0: Verify Salt Integrity (Cloud Authority)
+                // This replaces syncTemporarySalt and handles Split-Brain scenarios
                 try {
-                    // Sync temporary salt if it exists (for offline-first setup)
-                    const saltSyncResult = await syncTemporarySalt(user.uid);
-                    
+                    // Check logic handles frequency (once per session) internally
+                    const saltIntegrityResult = await verifySaltIntegrity(user.uid);
+
                     // If salt conflict detected, re-encrypt local entries
-                    if (saltSyncResult && saltSyncResult.requiresReEncryption) {
+                    if (saltIntegrityResult && saltIntegrityResult.requiresReEncryption) {
                         console.log('🔄 Salt conflict detected, re-encrypting local entries...');
                         const reEncryptResult = await reEncryptAllPasswords(user.uid);
-                        
+
                         if (reEncryptResult.success) {
-                            console.log(`✅ Re-encrypted ${reEncryptResult.reEncryptedCount} local passwords with cloud salt`);
+                            // console.log(`✅ Re-encrypted ${reEncryptResult.reEncryptedCount} local passwords with cloud salt`);
                             if (reEncryptResult.failedCount > 0) {
                                 console.warn(`⚠️ ${reEncryptResult.failedCount} passwords could not be re-encrypted`);
                             }
@@ -588,401 +595,395 @@ export const syncBidirectional = async () => {
                             // Continue with sync - some entries might still work
                         }
                     }
-                    
+
+                    /* LEGACY MIGRATION REMOVED (Handled by verifySaltIntegrity now)
                     // Check for local-to-cloud salt migration (when user enables cloud sync after creating local entries)
                     const { migrateLocalToCloudSalt } = await import('./SaltMigrationService');
                     const migrationResult = await migrateLocalToCloudSalt();
                     if (migrationResult.migrated) {
                         console.log(`✅ Migrated ${migrationResult.reEncryptedCount || 0} local passwords to cloud salt`);
                     }
-                    
+                    */
+
                     // Ensure salt exists in Firestore (auto-create if missing)
-                    // This handles cases where master password was set up before salt implementation
-                    // or if salt was never created for any reason
-                    // Always check and create salt during sync to ensure it's in Firestore
                     try {
                         const saltCheck = await getUserSalt(false);
                         if (!saltCheck.success) {
                             console.log('⚠️ Salt check failed, will retry...');
-                        } else if (saltCheck.isTemporary) {
-                            console.log('⚠️ Salt is temporary, will be synced...');
-                        } else {
-                            console.log('✅ Salt exists in Firestore');
                         }
-                        // getUserSalt() automatically creates salt in Firestore if missing
-                        // This ensures salt is always created during sync operations
                     } catch (saltCheckError) {
                         console.warn('⚠️ Salt check error (non-critical):', saltCheckError);
                     }
+
                 } catch (saltError) {
-                    console.warn('⚠️ Failed to ensure salt exists (non-critical):', saltError);
+                    console.warn('⚠️ Failed to ensure salt integrity (non-critical):', saltError);
                     // Don't fail the entire sync if salt check fails
                 }
 
                 // Step 1: Fetch both datasets
                 const localPasswords = Database.getPasswords();
-        const tombstones = Database.getDeletedPasswords(); // Get deleted passwords (tombstones)
+                const tombstones = Database.getDeletedPasswords(); // Get deleted passwords (tombstones)
 
-        // DEBUG: Log local passwords with their IDs
-        console.log('🔍 DEBUG: Local passwords fetched:', localPasswords.length);
-        console.log('🔍 DEBUG: Tombstones found:', tombstones.length);
-        const localIdCounts = {};
-        localPasswords.forEach(pwd => {
-            localIdCounts[pwd.id] = (localIdCounts[pwd.id] || 0) + 1;
-        });
-        const duplicateLocalIds = Object.entries(localIdCounts).filter(([id, count]) => count > 1);
-        if (duplicateLocalIds.length > 0) {
-            console.error('🚨 DUPLICATE LOCAL IDs DETECTED:', duplicateLocalIds);
-        }
+                // DEBUG: Log local passwords with their IDs
+                console.log('🔍 DEBUG: Local passwords fetched:', localPasswords.length);
+                console.log('🔍 DEBUG: Tombstones found:', tombstones.length);
+                const localIdCounts = {};
+                localPasswords.forEach(pwd => {
+                    localIdCounts[pwd.id] = (localIdCounts[pwd.id] || 0) + 1;
+                });
+                const duplicateLocalIds = Object.entries(localIdCounts).filter(([id, count]) => count > 1);
+                if (duplicateLocalIds.length > 0) {
+                    console.error('🚨 DUPLICATE LOCAL IDs DETECTED:', duplicateLocalIds);
+                }
 
-        const cloudResult = await FirestoreService.getPasswords(user.uid);
+                const cloudResult = await FirestoreService.getPasswords(user.uid);
 
-        if (!cloudResult.success) {
-            return { success: false, error: cloudResult.error };
-        }
+                if (!cloudResult.success) {
+                    return { success: false, error: cloudResult.error };
+                }
 
-        const cloudPasswords = cloudResult.passwords || [];
+                const cloudPasswords = cloudResult.passwords || [];
 
-        console.log(`📊 Local: ${localPasswords.length}, Cloud: ${cloudPasswords.length}, Tombstones: ${tombstones.length}`);
+                console.log(`📊 Local: ${localPasswords.length}, Cloud: ${cloudPasswords.length}, Tombstones: ${tombstones.length}`);
 
-        // OPTIMIZATION 1: Create hash maps for O(1) lookups instead of O(n)
-        const localMap = new Map(localPasswords.map(p => [p.id, p]));
-        const cloudMap = new Map(cloudPasswords.map(p => [p.id, p]));
-        const tombstoneMap = new Map(tombstones.map(t => [t.id, t])); // Map of deleted passwords
+                // OPTIMIZATION 1: Create hash maps for O(1) lookups instead of O(n)
+                const localMap = new Map(localPasswords.map(p => [p.id, p]));
+                const cloudMap = new Map(cloudPasswords.map(p => [p.id, p]));
+                const tombstoneMap = new Map(tombstones.map(t => [t.id, t])); // Map of deleted passwords
 
-        // Collect operations to batch
-        let toUpload = [];
-        const toDownload = [];
-        const toUpdateCloud = [];
-        const toUpdateLocal = [];
+                // Collect operations to batch
+                let toUpload = [];
+                const toDownload = [];
+                const toUpdateCloud = [];
+                const toUpdateLocal = [];
 
-        // CRITICAL FIX: Track which IDs we're uploading to prevent duplicates
-        const uploadingIds = new Set();
+                // CRITICAL FIX: Track which IDs we're uploading to prevent duplicates
+                const uploadingIds = new Set();
 
-        // Step 2: Process cloud passwords (O(n) instead of O(n²))
-        for (const cloudPwd of cloudPasswords) {
-            // Match by ID (UUID)
-            const localPwd = localMap.get(cloudPwd.id);
-            const tombstone = tombstoneMap.get(cloudPwd.id);
+                // Step 2: Process cloud passwords (O(n) instead of O(n²))
+                for (const cloudPwd of cloudPasswords) {
+                    // Match by ID (UUID)
+                    const localPwd = localMap.get(cloudPwd.id);
+                    const tombstone = tombstoneMap.get(cloudPwd.id);
 
-            if (tombstone) {
-                // Case E: Exists in cloud but deleted locally (tombstone) → Delete from cloud
-                // This will be handled in Step 4 (tombstone processing)
-                // Skip here to avoid downloading
-                console.log(`🗑️ Skipping ${cloudPwd.siteName} - marked as deleted locally (tombstone)`);
-                continue;
-            }
+                    if (tombstone) {
+                        // Case E: Exists in cloud but deleted locally (tombstone) → Delete from cloud
+                        // This will be handled in Step 4 (tombstone processing)
+                        // Skip here to avoid downloading
+                        console.log(`🗑️ Skipping ${cloudPwd.siteName} - marked as deleted locally (tombstone)`);
+                        continue;
+                    }
 
-            if (!localPwd) {
-                // Case B: Only in cloud → Download to local
-                toDownload.push(cloudPwd);
-            } else {
-                // Case A: Exists in both → Compare timestamps
-                // Use lastModified from cloud if available, otherwise fallback to Firestore timestamps
-                const cloudTime = new Date(cloudPwd.lastModified || cloudPwd.lastUpdated || cloudPwd.updatedAt || cloudPwd.createdAt || 0);
-                const localTime = new Date(localPwd.lastModified || 0);
-
-                if (cloudTime > localTime) {
-                    // Cloud is newer → Update local
-                    toUpdateLocal.push({ cloud: cloudPwd, local: localPwd });
-                } else if (localTime > cloudTime) {
-                    // Local is newer → Update cloud
-                    if (cloudPwd.id) {
-                        toUpdateCloud.push({ cloud: cloudPwd, local: localPwd });
+                    if (!localPwd) {
+                        // Case B: Only in cloud → Download to local
+                        toDownload.push(cloudPwd);
                     } else {
-                        console.warn(`⚠️ Skipping cloud update for ${cloudPwd.siteName}: Missing cloud ID`);
+                        // Case A: Exists in both → Compare timestamps
+                        // Use lastModified from cloud if available, otherwise fallback to Firestore timestamps
+                        const cloudTime = new Date(cloudPwd.lastModified || cloudPwd.lastUpdated || cloudPwd.updatedAt || cloudPwd.createdAt || 0);
+                        const localTime = new Date(localPwd.lastModified || 0);
+
+                        if (cloudTime > localTime) {
+                            // Cloud is newer → Update local
+                            toUpdateLocal.push({ cloud: cloudPwd, local: localPwd });
+                        } else if (localTime > cloudTime) {
+                            // Local is newer → Update cloud
+                            if (cloudPwd.id) {
+                                toUpdateCloud.push({ cloud: cloudPwd, local: localPwd });
+                            } else {
+                                console.warn(`⚠️ Skipping cloud update for ${cloudPwd.siteName}: Missing cloud ID`);
+                            }
+                        }
+                        // If timestamps are equal, no action needed
                     }
                 }
-                // If timestamps are equal, no action needed
-            }
-        }
 
-        // Step 3: Process local passwords (find local-only items) - O(n)
-        for (const localPwd of localPasswords) {
-            if (!cloudMap.has(localPwd.id)) {
-                // Case D: Only in local → Upload to cloud
-                // CRITICAL FIX: Check if we're already uploading this ID
-                if (!uploadingIds.has(localPwd.id)) {
-                    toUpload.push(localPwd);
-                    uploadingIds.add(localPwd.id);
-                } else {
-                    console.warn(`⚠️ Duplicate upload prevented for ${localPwd.siteName} (ID: ${localPwd.id})`);
-                }
-            }
-            // If exists in both, already handled in Step 2
-        }
-
-        console.log(`📤 To upload: ${toUpload.length}`);
-        console.log(`📥 To download: ${toDownload.length}`);
-        console.log(`🔄 To update local: ${toUpdateLocal.length}`);
-        console.log(`🔄 To update cloud: ${toUpdateCloud.length}`);
-
-        // DEBUG: Log toUpload array contents
-        if (toUpload.length > 0) {
-            console.log('🔍 DEBUG: Passwords to upload:');
-            toUpload.forEach((pwd, index) => {
-                console.log(`  [${index}] localId: ${pwd.id}, siteName: ${pwd.siteName}, cloudSynced: ${pwd.cloudSynced}`);
-            });
-
-            // Check for duplicates in toUpload array
-            const uploadLocalIds = toUpload.map(p => p.id);
-            const uploadDuplicates = uploadLocalIds.filter((id, index) => uploadLocalIds.indexOf(id) !== index);
-            if (uploadDuplicates.length > 0) {
-                console.error('🚨 DUPLICATES IN UPLOAD QUEUE:', uploadDuplicates);
-            }
-        }
-
-        // CRITICAL: Check cloud password limit BEFORE uploading NEW local-only passwords
-        // NOTE: Updates to existing cloud passwords (toUpdateCloud) are NOT blocked by limit
-        // because updates don't create new documents - they modify existing ones
-        let cloudLimit;
-        try {
-            cloudLimit = await getCloudPasswordLimit();
-        } catch (limitError) {
-            // If limit fetch fails, try cached value
-            const cachedLimit = await SecureStore.getItemAsync('CLOUD_PASSWORD_LIMIT');
-            if (cachedLimit) {
-                cloudLimit = parseInt(cachedLimit, 10);
-                console.log('📱 Using cached limit for sync:', cloudLimit);
-            } else {
-                // No limit available - skip uploads but allow updates
-                console.warn('⚠️ Cannot fetch limit, skipping new uploads but allowing updates');
-                cloudLimit = 0; // Prevent new uploads
-            }
-        }
-        const currentCloudCount = cloudPasswords.length;
-        const availableSpace = cloudLimit - currentCloudCount;
-        let uploadSkipped = false;
-        let skippedCount = 0;
-
-        // Sort toUpload by lastModified (oldest first) to prioritize earlier entries
-        toUpload.sort((a, b) => {
-            const timeA = new Date(a.lastModified || 0).getTime();
-            const timeB = new Date(b.lastModified || 0).getTime();
-            return timeA - timeB;
-        });
-
-        // If we have more entries than available space, only upload what fits
-        if (toUpload.length > availableSpace) {
-            skippedCount = toUpload.length - availableSpace;
-            console.warn(`⚠️ Cloud limit reached (${currentCloudCount}/${cloudLimit}). Uploading ${availableSpace} of ${toUpload.length} NEW entries. ${skippedCount} will remain unsynced.`);
-            console.warn(`ℹ️ Updates to existing cloud passwords will still proceed (they don't count against limit)`);
-            toUpload = toUpload.slice(0, availableSpace);
-            uploadSkipped = skippedCount > 0;
-        } else if (availableSpace <= 0) {
-            // No space available at all - block ALL new uploads
-            skippedCount = toUpload.length;
-            console.warn(`⚠️ Cloud limit reached (${currentCloudCount}/${cloudLimit}). Skipping all ${toUpload.length} NEW uploads.`);
-            console.warn(`ℹ️ Updates to existing cloud passwords will still proceed (they don't count against limit)`);
-            toUpload = [];
-            uploadSkipped = true;
-        }
-        // OPTIMIZATION 2: Execute local operations synchronously (fast)
-        // Download new passwords
-        for (const cloudPwd of toDownload) {
-            try {
-                // Use the UUID from cloud
-                const { id } = Database.addPassword(
-                    cloudPwd.siteName || 'Untitled',
-                    cloudPwd.username || '',
-                    cloudPwd.encryptedPassword || '',
-                    cloudPwd.comments || '',
-                    1, // Mark as synced
-                    cloudPwd.id // Pass the UUID
-                );
-            } catch (err) {
-                console.error(`❌ Error downloading ${cloudPwd.siteName}:`, err);
-            }
-        }
-
-        // Update local passwords
-        for (const { cloud, local } of toUpdateLocal) {
-            try {
-                Database.updatePassword(
-                    local.id,
-                    cloud.siteName || 'Untitled',
-                    cloud.username || '',
-                    cloud.encryptedPassword || '',
-                    cloud.comments || ''
-                );
-            } catch (err) {
-                console.error(`❌ Error updating local ${cloud.siteName}:`, err);
-            }
-        }
-
-        // OPTIMIZATION 3: Execute cloud operations in parallel batches
-        const BATCH_SIZE = 50; // Process 50 at a time
-        let uploadedCount = 0;
-        let updatedCloudCount = 0;
-        let errorCount = 0;
-
-        // Upload new passwords in batches
-        for (let i = 0; i < toUpload.length; i += BATCH_SIZE) {
-            const batch = toUpload.slice(i, i + BATCH_SIZE);
-
-            // DEBUG: Log batch upload details
-            console.log(`🔍 DEBUG: Uploading batch ${Math.floor(i / BATCH_SIZE) + 1}, size: ${batch.length}`);
-            batch.forEach((pwd, idx) => {
-                console.log(`  Batch[${idx}] localId: ${pwd.id}, siteName: ${pwd.siteName}`);
-            });
-
-            const results = await Promise.allSettled(
-                batch.map((pwd, batchIndex) => {
-                    console.log(`📤 Uploading: ${pwd.siteName} (localId: ${pwd.id})`);
-                    return FirestoreService.savePassword(user.uid, {
-                        siteName: pwd.siteName,
-                        username: pwd.username,
-                        encryptedPassword: pwd.encryptedPassword,
-                        comments: pwd.comments,
-                        lastModified: pwd.lastModified,
-                        id: pwd.id // Use UUID
-                    });
-                })
-            );
-
-            results.forEach((result, index) => {
-                if (result.status === 'fulfilled' && result.value.success) {
-                    uploadedCount++;
-                    console.log(`✅ Uploaded: ${batch[index].siteName} (localId: ${batch[index].id}) → Firestore ID: ${result.value.id}`);
-
-                    // CRITICAL FIX: Update local sync status so yellow highlight disappears
-                    Database.updateCloudSyncStatus(batch[index].id, 1);
-                } else {
-                    errorCount++;
-                    const errorMsg = result.status === 'rejected' ? result.reason : result.value.error;
-                    console.error(`❌ Failed to upload ${batch[index].siteName} (localId: ${batch[index].id}):`, errorMsg);
-                }
-            });
-        }
-
-        // Update cloud passwords in batches
-        // CRITICAL: These are updates to EXISTING cloud passwords (matched by ID in cloudMap)
-        // Updates do NOT create new documents, so they are NOT blocked by cloud limit
-        // This ensures already-synced passwords can still be updated even when limit is reached
-        for (let i = 0; i < toUpdateCloud.length; i += BATCH_SIZE) {
-            const batch = toUpdateCloud.slice(i, i + BATCH_SIZE);
-            const results = await Promise.allSettled(
-                batch.map(({ cloud, local }) => {
-                    // Verify document exists in cloud before updating
-                    if (!cloudMap.has(local.id)) {
-                        console.warn(`⚠️ Password ${local.siteName} (${local.id}) not found in cloud map, skipping update`);
-                        return Promise.resolve({ success: false, error: 'Not in cloud map' });
+                // Step 3: Process local passwords (find local-only items) - O(n)
+                for (const localPwd of localPasswords) {
+                    if (!cloudMap.has(localPwd.id)) {
+                        // Case D: Only in local → Upload to cloud
+                        // CRITICAL FIX: Check if we're already uploading this ID
+                        if (!uploadingIds.has(localPwd.id)) {
+                            toUpload.push(localPwd);
+                            uploadingIds.add(localPwd.id);
+                        } else {
+                            console.warn(`⚠️ Duplicate upload prevented for ${localPwd.siteName} (ID: ${localPwd.id})`);
+                        }
                     }
-                    return FirestoreService.updatePassword(user.uid, cloud.id, {
-                        siteName: local.siteName,
-                        username: local.username,
-                        encryptedPassword: local.encryptedPassword,
-                        comments: local.comments,
-                        lastModified: local.lastModified
+                    // If exists in both, already handled in Step 2
+                }
+
+                console.log(`📤 To upload: ${toUpload.length}`);
+                console.log(`📥 To download: ${toDownload.length}`);
+                console.log(`🔄 To update local: ${toUpdateLocal.length}`);
+                console.log(`🔄 To update cloud: ${toUpdateCloud.length}`);
+
+                // DEBUG: Log toUpload array contents
+                if (toUpload.length > 0) {
+                    console.log('🔍 DEBUG: Passwords to upload:');
+                    toUpload.forEach((pwd, index) => {
+                        console.log(`  [${index}] localId: ${pwd.id}, siteName: ${pwd.siteName}, cloudSynced: ${pwd.cloudSynced}`);
                     });
-                })
-            );
 
-            results.forEach((result, index) => {
-                if (result.status === 'fulfilled' && result.value.success) {
-                    updatedCloudCount++;
-                    console.log(`✅ Updated cloud: ${batch[index].local.siteName} (ID: ${batch[index].cloud.id})`);
-                } else {
-                    errorCount++;
-                    const errorMsg = result.status === 'rejected' ? result.reason : result.value.error;
-                    console.error(`❌ Failed to update cloud ${batch[index].local.siteName}:`, errorMsg);
-                    // Note: If update fails because document doesn't exist, it won't be created
-                    // This is correct - we only update existing documents in sync
+                    // Check for duplicates in toUpload array
+                    const uploadLocalIds = toUpload.map(p => p.id);
+                    const uploadDuplicates = uploadLocalIds.filter((id, index) => uploadLocalIds.indexOf(id) !== index);
+                    if (uploadDuplicates.length > 0) {
+                        console.error('🚨 DUPLICATES IN UPLOAD QUEUE:', uploadDuplicates);
+                    }
                 }
-            });
-        }
 
-        // Step 4: Process tombstones (deleted passwords) - delete from cloud
-        // Note: tombstones were already fetched in Step 1
-        // OPTIMIZATION: Skip tombstone processing if none exist (no network calls)
-        let deletedFromCloudCount = 0;
-        const toPermanentlyDelete = [];
-
-        if (tombstones.length > 0) {
-            console.log(`🗑️ Processing ${tombstones.length} tombstones (deleted passwords) to sync`);
-            // CRITICAL: Tombstones (deletions) are processed regardless of cloud limit
-            // Deletions don't create new documents, they remove existing ones
-            // This is correct behavior - we should always sync deletions
-            
-            // Delete tombstones from cloud in batches
-            for (let i = 0; i < tombstones.length; i += BATCH_SIZE) {
-            const batch = tombstones.slice(i, i + BATCH_SIZE);
-            const deleteResults = await Promise.allSettled(
-                batch.map((tombstone) => {
-                    console.log(`🗑️ Deleting from cloud: ${tombstone.siteName} (ID: ${tombstone.id})`);
-                    return FirestoreService.deletePassword(user.uid, tombstone.id);
-                })
-            );
-
-            deleteResults.forEach((result, index) => {
-                const tombstone = batch[index];
-                if (result.status === 'fulfilled' && result.value.success) {
-                    deletedFromCloudCount++;
-                    // Mark tombstone for permanent deletion
-                    toPermanentlyDelete.push(tombstone.id);
-                    console.log(`✅ Deleted from cloud: ${tombstone.siteName} (ID: ${tombstone.id})`);
-                } else {
-                    errorCount++;
-                    const errorMsg = result.status === 'rejected' ? result.reason : result.value.error;
-                    console.error(`❌ Failed to delete tombstone ${tombstone.siteName} from cloud:`, errorMsg);
-                    // Keep tombstone for next sync attempt
-                }
-            });
-            }
-
-            // Permanently remove tombstones that were successfully deleted from cloud
-            for (const id of toPermanentlyDelete) {
+                // CRITICAL: Check cloud password limit BEFORE uploading NEW local-only passwords
+                // NOTE: Updates to existing cloud passwords (toUpdateCloud) are NOT blocked by limit
+                // because updates don't create new documents - they modify existing ones
+                let cloudLimit;
                 try {
-                    Database.permanentlyDelete(id);
-                    console.log(`🧹 Permanently removed tombstone: ${id}`);
-                } catch (err) {
-                    console.error(`❌ Error permanently deleting tombstone ${id}:`, err);
+                    cloudLimit = await getCloudPasswordLimit();
+                } catch (limitError) {
+                    // If limit fetch fails, try cached value
+                    const cachedLimit = await SecureStore.getItemAsync('CLOUD_PASSWORD_LIMIT');
+                    if (cachedLimit) {
+                        cloudLimit = parseInt(cachedLimit, 10);
+                        console.log('📱 Using cached limit for sync:', cloudLimit);
+                    } else {
+                        // No limit available - skip uploads but allow updates
+                        console.warn('⚠️ Cannot fetch limit, skipping new uploads but allowing updates');
+                        cloudLimit = 0; // Prevent new uploads
+                    }
                 }
-            }
-        } else {
-            console.log('📭 No tombstones to process');
-        }
+                const currentCloudCount = cloudPasswords.length;
+                const availableSpace = cloudLimit - currentCloudCount;
+                let uploadSkipped = false;
+                let skippedCount = 0;
 
-        // Update last sync time
-        await SecureStore.setItemAsync('LAST_SYNC_TIME', new Date().toISOString());
+                // Sort toUpload by lastModified (oldest first) to prioritize earlier entries
+                toUpload.sort((a, b) => {
+                    const timeA = new Date(a.lastModified || 0).getTime();
+                    const timeB = new Date(b.lastModified || 0).getTime();
+                    return timeA - timeB;
+                });
 
-        const totalSynced = uploadedCount + toDownload.length + toUpdateLocal.length + updatedCloudCount + deletedFromCloudCount;
+                // If we have more entries than available space, only upload what fits
+                if (toUpload.length > availableSpace) {
+                    skippedCount = toUpload.length - availableSpace;
+                    console.warn(`⚠️ Cloud limit reached (${currentCloudCount}/${cloudLimit}). Uploading ${availableSpace} of ${toUpload.length} NEW entries. ${skippedCount} will remain unsynced.`);
+                    console.warn(`ℹ️ Updates to existing cloud passwords will still proceed (they don't count against limit)`);
+                    toUpload = toUpload.slice(0, availableSpace);
+                    uploadSkipped = skippedCount > 0;
+                } else if (availableSpace <= 0) {
+                    // No space available at all - block ALL new uploads
+                    skippedCount = toUpload.length;
+                    console.warn(`⚠️ Cloud limit reached (${currentCloudCount}/${cloudLimit}). Skipping all ${toUpload.length} NEW uploads.`);
+                    console.warn(`ℹ️ Updates to existing cloud passwords will still proceed (they don't count against limit)`);
+                    toUpload = [];
+                    uploadSkipped = true;
+                }
+                // OPTIMIZATION 2: Execute local operations synchronously (fast)
+                // Download new passwords
+                for (const cloudPwd of toDownload) {
+                    try {
+                        // Use the UUID from cloud
+                        const { id } = Database.addPassword(
+                            cloudPwd.siteName || 'Untitled',
+                            cloudPwd.username || '',
+                            cloudPwd.encryptedPassword || '',
+                            cloudPwd.comments || '',
+                            1, // Mark as synced
+                            cloudPwd.id // Pass the UUID
+                        );
+                    } catch (err) {
+                        console.error(`❌ Error downloading ${cloudPwd.siteName}:`, err);
+                    }
+                }
 
-        console.log(`✅ Sync complete! Total: ${totalSynced}, Errors: ${errorCount}`);
-        console.log(`   - Uploaded: ${uploadedCount}`);
-        console.log(`   - Downloaded: ${toDownload.length}`);
-        console.log(`   - Updated local: ${toUpdateLocal.length}`);
-        console.log(`   - Updated cloud: ${updatedCloudCount}`);
-        console.log(`   - Deleted from cloud: ${deletedFromCloudCount}`);
+                // Update local passwords
+                for (const { cloud, local } of toUpdateLocal) {
+                    try {
+                        Database.updatePassword(
+                            local.id,
+                            cloud.siteName || 'Untitled',
+                            cloud.username || '',
+                            cloud.encryptedPassword || '',
+                            cloud.comments || ''
+                        );
+                    } catch (err) {
+                        console.error(`❌ Error updating local ${cloud.siteName}:`, err);
+                    }
+                }
 
-        return {
-            success: errorCount === 0,
-            uploaded: uploadedCount,
-            downloaded: toDownload.length,
-            updatedLocal: toUpdateLocal.length,
-            updatedCloud: updatedCloudCount,
-            deletedFromCloud: deletedFromCloudCount,
-            total: totalSynced,
-            errors: errorCount,
-            limitReached: uploadSkipped,
-            skippedCount: skippedCount || 0,
-            message: uploadSkipped
-                ? (skippedCount > 0
-                    ? `Synced ${totalSynced} passwords (${skippedCount} skipped due to limit: ${currentCloudCount + uploadedCount}/${cloudLimit})`
-                    : `Synced ${totalSynced} passwords (Uploads skipped: Limit reached)`)
-                : (errorCount > 0
-                    ? `Synced ${totalSynced} passwords with ${errorCount} errors`
-                    : `Successfully synced ${totalSynced} passwords`)
-        };
+                // OPTIMIZATION 3: Execute cloud operations in parallel batches
+                const BATCH_SIZE = 50; // Process 50 at a time
+                let uploadedCount = 0;
+                let updatedCloudCount = 0;
+                let errorCount = 0;
+
+                // Upload new passwords in batches
+                for (let i = 0; i < toUpload.length; i += BATCH_SIZE) {
+                    const batch = toUpload.slice(i, i + BATCH_SIZE);
+
+                    // DEBUG: Log batch upload details
+                    console.log(`🔍 DEBUG: Uploading batch ${Math.floor(i / BATCH_SIZE) + 1}, size: ${batch.length}`);
+                    batch.forEach((pwd, idx) => {
+                        console.log(`  Batch[${idx}] localId: ${pwd.id}, siteName: ${pwd.siteName}`);
+                    });
+
+                    const results = await Promise.allSettled(
+                        batch.map((pwd, batchIndex) => {
+                            console.log(`📤 Uploading: ${pwd.siteName} (localId: ${pwd.id})`);
+                            return FirestoreService.savePassword(user.uid, {
+                                siteName: pwd.siteName,
+                                username: pwd.username,
+                                encryptedPassword: pwd.encryptedPassword,
+                                comments: pwd.comments,
+                                lastModified: pwd.lastModified,
+                                id: pwd.id // Use UUID
+                            });
+                        })
+                    );
+
+                    results.forEach((result, index) => {
+                        if (result.status === 'fulfilled' && result.value.success) {
+                            uploadedCount++;
+                            console.log(`✅ Uploaded: ${batch[index].siteName} (localId: ${batch[index].id}) → Firestore ID: ${result.value.id}`);
+
+                            // CRITICAL FIX: Update local sync status so yellow highlight disappears
+                            Database.updateCloudSyncStatus(batch[index].id, 1);
+                        } else {
+                            errorCount++;
+                            const errorMsg = result.status === 'rejected' ? result.reason : result.value.error;
+                            console.error(`❌ Failed to upload ${batch[index].siteName} (localId: ${batch[index].id}):`, errorMsg);
+                        }
+                    });
+                }
+
+                // Update cloud passwords in batches
+                // CRITICAL: These are updates to EXISTING cloud passwords (matched by ID in cloudMap)
+                // Updates do NOT create new documents, so they are NOT blocked by cloud limit
+                // This ensures already-synced passwords can still be updated even when limit is reached
+                for (let i = 0; i < toUpdateCloud.length; i += BATCH_SIZE) {
+                    const batch = toUpdateCloud.slice(i, i + BATCH_SIZE);
+                    const results = await Promise.allSettled(
+                        batch.map(({ cloud, local }) => {
+                            // Verify document exists in cloud before updating
+                            if (!cloudMap.has(local.id)) {
+                                console.warn(`⚠️ Password ${local.siteName} (${local.id}) not found in cloud map, skipping update`);
+                                return Promise.resolve({ success: false, error: 'Not in cloud map' });
+                            }
+                            return FirestoreService.updatePassword(user.uid, cloud.id, {
+                                siteName: local.siteName,
+                                username: local.username,
+                                encryptedPassword: local.encryptedPassword,
+                                comments: local.comments,
+                                lastModified: local.lastModified
+                            });
+                        })
+                    );
+
+                    results.forEach((result, index) => {
+                        if (result.status === 'fulfilled' && result.value.success) {
+                            updatedCloudCount++;
+                            console.log(`✅ Updated cloud: ${batch[index].local.siteName} (ID: ${batch[index].cloud.id})`);
+                        } else {
+                            errorCount++;
+                            const errorMsg = result.status === 'rejected' ? result.reason : result.value.error;
+                            console.error(`❌ Failed to update cloud ${batch[index].local.siteName}:`, errorMsg);
+                            // Note: If update fails because document doesn't exist, it won't be created
+                            // This is correct - we only update existing documents in sync
+                        }
+                    });
+                }
+
+                // Step 4: Process tombstones (deleted passwords) - delete from cloud
+                // Note: tombstones were already fetched in Step 1
+                // OPTIMIZATION: Skip tombstone processing if none exist (no network calls)
+                let deletedFromCloudCount = 0;
+                const toPermanentlyDelete = [];
+
+                if (tombstones.length > 0) {
+                    console.log(`🗑️ Processing ${tombstones.length} tombstones (deleted passwords) to sync`);
+                    // CRITICAL: Tombstones (deletions) are processed regardless of cloud limit
+                    // Deletions don't create new documents, they remove existing ones
+                    // This is correct behavior - we should always sync deletions
+
+                    // Delete tombstones from cloud in batches
+                    for (let i = 0; i < tombstones.length; i += BATCH_SIZE) {
+                        const batch = tombstones.slice(i, i + BATCH_SIZE);
+                        const deleteResults = await Promise.allSettled(
+                            batch.map((tombstone) => {
+                                console.log(`🗑️ Deleting from cloud: ${tombstone.siteName} (ID: ${tombstone.id})`);
+                                return FirestoreService.deletePassword(user.uid, tombstone.id);
+                            })
+                        );
+
+                        deleteResults.forEach((result, index) => {
+                            const tombstone = batch[index];
+                            if (result.status === 'fulfilled' && result.value.success) {
+                                deletedFromCloudCount++;
+                                // Mark tombstone for permanent deletion
+                                toPermanentlyDelete.push(tombstone.id);
+                                console.log(`✅ Deleted from cloud: ${tombstone.siteName} (ID: ${tombstone.id})`);
+                            } else {
+                                errorCount++;
+                                const errorMsg = result.status === 'rejected' ? result.reason : result.value.error;
+                                console.error(`❌ Failed to delete tombstone ${tombstone.siteName} from cloud:`, errorMsg);
+                                // Keep tombstone for next sync attempt
+                            }
+                        });
+                    }
+
+                    // Permanently remove tombstones that were successfully deleted from cloud
+                    for (const id of toPermanentlyDelete) {
+                        try {
+                            Database.permanentlyDelete(id);
+                            console.log(`🧹 Permanently removed tombstone: ${id}`);
+                        } catch (err) {
+                            console.error(`❌ Error permanently deleting tombstone ${id}:`, err);
+                        }
+                    }
+                } else {
+                    console.log('📭 No tombstones to process');
+                }
+
+                // Update last sync time
+                await SecureStore.setItemAsync('LAST_SYNC_TIME', new Date().toISOString());
+
+                const totalSynced = uploadedCount + toDownload.length + toUpdateLocal.length + updatedCloudCount + deletedFromCloudCount;
+
+                console.log(`✅ Sync complete! Total: ${totalSynced}, Errors: ${errorCount}`);
+                console.log(`   - Uploaded: ${uploadedCount}`);
+                console.log(`   - Downloaded: ${toDownload.length}`);
+                console.log(`   - Updated local: ${toUpdateLocal.length}`);
+                console.log(`   - Updated cloud: ${updatedCloudCount}`);
+                console.log(`   - Deleted from cloud: ${deletedFromCloudCount}`);
+
+                return {
+                    success: errorCount === 0,
+                    uploaded: uploadedCount,
+                    downloaded: toDownload.length,
+                    updatedLocal: toUpdateLocal.length,
+                    updatedCloud: updatedCloudCount,
+                    deletedFromCloud: deletedFromCloudCount,
+                    total: totalSynced,
+                    errors: errorCount,
+                    limitReached: uploadSkipped,
+                    skippedCount: skippedCount || 0,
+                    message: uploadSkipped
+                        ? (skippedCount > 0
+                            ? `Synced ${totalSynced} passwords (${skippedCount} skipped due to limit: ${currentCloudCount + uploadedCount}/${cloudLimit})`
+                            : `Synced ${totalSynced} passwords (Uploads skipped: Limit reached)`)
+                        : (errorCount > 0
+                            ? `Synced ${totalSynced} passwords with ${errorCount} errors`
+                            : `Successfully synced ${totalSynced} passwords`)
+                };
             } catch (error) {
                 console.error('❌ Error in syncBidirectional:', error);
-                
+
                 // Handle timeout specifically
                 if (error.message?.includes('timed out')) {
                     console.warn('⏰ Sync operation timed out - likely network issue after idle');
                     return { success: false, error: 'Sync timed out. Please check your network connection.' };
                 }
-                
+
                 return { success: false, error: error.message };
             }
         })(),
@@ -996,7 +997,7 @@ export const syncBidirectional = async () => {
         isSyncing = false;
         syncPromise = null;
     });
-    
+
     // Store the promise so concurrent calls can return it
     syncPromise = syncOperation;
     return syncOperation;

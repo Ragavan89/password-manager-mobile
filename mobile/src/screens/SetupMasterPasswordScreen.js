@@ -11,7 +11,6 @@ import {
     Platform,
     ActivityIndicator
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import { isMasterPasswordRequired } from '../config/EncryptionConfig';
 import { validateMasterPasswordStrength } from '../services/AuthService';
@@ -97,7 +96,7 @@ export default function SetupMasterPasswordScreen({ navigation }) {
                 // For cloud sync users, require online connection on first setup
                 // This ensures salt can be fetched/synced properly
                 const requireOnline = isCloudSyncEnabled;
-                
+
                 // Double-check network status
                 if (requireOnline) {
                     const netState = await NetInfo.fetch();
@@ -153,7 +152,7 @@ export default function SetupMasterPasswordScreen({ navigation }) {
 
     if (showBackupScreen) {
         return (
-            <SafeAreaView style={styles.container}>
+            <View style={styles.container}>
                 <ScrollView contentContainerStyle={styles.scrollContent}>
                     <View style={styles.header}>
                         <Text style={styles.icon}>✅</Text>
@@ -217,12 +216,12 @@ export default function SetupMasterPasswordScreen({ navigation }) {
                         )}
                     </TouchableOpacity>
                 </ScrollView>
-            </SafeAreaView>
+            </View>
         );
     }
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.keyboardView}
@@ -344,7 +343,7 @@ export default function SetupMasterPasswordScreen({ navigation }) {
                     </TouchableOpacity>
                 </ScrollView>
             </KeyboardAvoidingView>
-        </SafeAreaView>
+        </View>
     );
 }
 

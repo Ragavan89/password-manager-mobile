@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, TextInput, Animated, RefreshControl } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as HybridStorageService from '../services/HybridStorageService';
 import { decryptPassword } from '../services/Encryption';
@@ -62,12 +62,12 @@ export default function HomeScreen({ navigation }) {
         try {
             const enabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
             const lastSync = await HybridStorageService.getLastSyncTime();
-            
+
             // Verify user is actually authenticated (not just flag set)
             // This prevents the banner from flashing when user logs in
             const user = getCurrentUser();
             const isActuallyEnabled = enabled === 'true' && user !== null;
-            
+
             setCloudSyncEnabled(isActuallyEnabled);
             setLastSyncTime(lastSync);
         } catch (error) {
@@ -143,7 +143,7 @@ export default function HomeScreen({ navigation }) {
                 color: '#343a40'
             }
         });
-        }, [navigation, cloudSyncEnabled]);
+    }, [navigation, cloudSyncEnabled]);
 
     const loadPasswords = async (options = { silent: false, skipSync: false }) => {
         // OPTIMIZATION: Never show loading spinner - always load instantly
@@ -183,7 +183,7 @@ export default function HomeScreen({ navigation }) {
                         if (syncResult && syncResult.success) {
                             console.log('✅ Silent background sync completed');
                             // Silently reload passwords to show any new data from cloud
-                            loadPasswords({ silent: true, skipSync: true }).catch(err => 
+                            loadPasswords({ silent: true, skipSync: true }).catch(err =>
                                 console.error('Error reloading after sync:', err)
                             );
                         } else if (syncResult && syncResult.error) {
@@ -233,7 +233,7 @@ export default function HomeScreen({ navigation }) {
     const toggleExpand = async (id) => {
         const isCurrentlyExpanded = expandedCards[id];
         setExpandedCards(prev => ({ ...prev, [id]: !prev[id] }));
-        
+
         // OPTIMIZATION: Decrypt password only when card is expanded (lazy loading)
         if (!isCurrentlyExpanded && !decryptedPasswords[id]) {
             const password = passwords.find(p => p.id === id);
@@ -356,15 +356,15 @@ export default function HomeScreen({ navigation }) {
                                     </Text>
                                 </View>
                                 <View style={styles.actionsRow}>
-                                    <TouchableOpacity 
-                                        onPress={() => toggleVisibility(item.id)} 
+                                    <TouchableOpacity
+                                        onPress={() => toggleVisibility(item.id)}
                                         style={styles.iconButton}
                                         disabled={!displayPassword}
                                     >
                                         <Text style={styles.iconText}>{showPassword[item.id] ? '👁️‍🗨️' : '👁️'}</Text>
                                     </TouchableOpacity>
-                                    <TouchableOpacity 
-                                        onPress={() => copyToClipboard(displayPassword || '', 'Password')} 
+                                    <TouchableOpacity
+                                        onPress={() => copyToClipboard(displayPassword || '', 'Password')}
                                         style={styles.iconButton}
                                         disabled={!displayPassword}
                                     >
@@ -410,7 +410,7 @@ export default function HomeScreen({ navigation }) {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             {/* Sync Status Banners */}
             {/* Only show banner if auth state is ready AND sync is explicitly disabled (not null/undefined) */}
             {isAuthStateReady && cloudSyncEnabled === false && (
@@ -485,14 +485,7 @@ export default function HomeScreen({ navigation }) {
                     </View>
                 }
             />
-
-            <TouchableOpacity
-                style={[styles.fab, { bottom: 30 + insets.bottom }]}
-                onPress={() => navigation.navigate('AddPassword')}
-            >
-                <Text style={styles.fabText}>+</Text>
-            </TouchableOpacity>
-        </SafeAreaView >
+        </View>
     );
 }
 

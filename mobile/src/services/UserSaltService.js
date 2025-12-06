@@ -9,6 +9,9 @@ import { ENCRYPTION_CONFIG } from '../config/EncryptionConfig';
 // EXPLICITLY get the named database instance
 const firestore = getFirestore(app, 'keyvault-pro-india');
 
+// Session-level cache for last verification time
+let lastSaltVerificationTime = 0;
+
 // Storage keys
 const TEMP_SALT_KEY = 'temp_user_salt';
 const TEMP_SALT_FLAG = 'has_temp_salt';
@@ -65,9 +68,9 @@ export const getUserSalt = async (requireOnline = false) => {
         }
     } catch (error) {
         console.error('Error getting user salt:', error);
-        return { 
-            success: false, 
-            error: error.message || 'Failed to get user salt' 
+        return {
+            success: false,
+            error: error.message || 'Failed to get user salt'
         };
     }
 };
@@ -80,7 +83,7 @@ export const getUserSalt = async (requireOnline = false) => {
  */
 const getUserSaltFromCloud = async (userId, requireOnline = false) => {
     const SALT_KEY = `userSalt_${userId}`;
-    
+
     // 1. Check local cache first (works offline)
     try {
         const cachedSalt = await SecureStore.getItemAsync(SALT_KEY);
@@ -94,39 +97,39 @@ const getUserSaltFromCloud = async (userId, requireOnline = false) => {
 
     // 2. Check if we're online
     const online = await isOnline();
-    
+
     if (!online) {
         // OFFLINE: Check if we have a temporary salt
         const tempSalt = await SecureStore.getItemAsync(TEMP_SALT_KEY);
         const hasTempSalt = await SecureStore.getItemAsync(TEMP_SALT_FLAG);
-        
+
         if (tempSalt && hasTempSalt === 'true') {
             console.log('⚠️ Using temporary salt (offline mode)');
-            return { 
-                success: true, 
-                salt: tempSalt, 
-                isTemporary: true 
+            return {
+                success: true,
+                salt: tempSalt,
+                isTemporary: true
             };
         }
-        
+
         // No salt available and offline
         if (requireOnline) {
-            return { 
-                success: false, 
-                error: 'Internet connection required for first-time setup. Please connect to the internet and try again.' 
+            return {
+                success: false,
+                error: 'Internet connection required for first-time setup. Please connect to the internet and try again.'
             };
         }
-        
+
         // Generate temporary salt (will sync when online)
         console.log('⚠️ Generating temporary salt (offline, will sync later)');
         const tempSaltValue = generateRandomSalt();
         await SecureStore.setItemAsync(TEMP_SALT_KEY, tempSaltValue);
         await SecureStore.setItemAsync(TEMP_SALT_FLAG, 'true');
-        
-        return { 
-            success: true, 
-            salt: tempSaltValue, 
-            isTemporary: true 
+
+        return {
+            success: true,
+            salt: tempSaltValue,
+            isTemporary: true
         };
     }
 
@@ -135,24 +138,24 @@ const getUserSaltFromCloud = async (userId, requireOnline = false) => {
         console.log(`🔍 Checking Firestore for salt: users/${userId}`);
         const userRef = doc(firestore, 'users', userId);
         const userDoc = await getDoc(userRef);
-        
+
         if (userDoc.exists()) {
             const userData = userDoc.data();
             console.log('📄 User document exists in Firestore');
             console.log('📋 Document fields:', Object.keys(userData));
-            
+
             if (userData.userSalt) {
                 // Salt exists in Firestore
                 const salt = userData.userSalt;
                 console.log('✅ Salt found in Firestore (length:', salt.length, ')');
-                
+
                 // Cache locally for offline use
                 await SecureStore.setItemAsync(SALT_KEY, salt);
-                
+
                 // Clear temporary salt if it exists
                 await SecureStore.deleteItemAsync(TEMP_SALT_KEY);
                 await SecureStore.deleteItemAsync(TEMP_SALT_FLAG);
-                
+
                 console.log('✅ Fetched user salt from Firestore and cached locally');
                 return { success: true, salt, isTemporary: false };
             } else {
@@ -167,23 +170,23 @@ const getUserSaltFromCloud = async (userId, requireOnline = false) => {
         console.error('❌ Error fetching salt from Firestore:', error);
         console.error('Error code:', error.code);
         console.error('Error message:', error.message);
-        
+
         // If requireOnline is true, fail immediately
         if (requireOnline) {
-            return { 
-                success: false, 
-                error: 'Failed to fetch salt from cloud. Please check your internet connection and try again.' 
+            return {
+                success: false,
+                error: 'Failed to fetch salt from cloud. Please check your internet connection and try again.'
             };
         }
-        
+
         // Otherwise, use temporary salt
         console.log('⚠️ Firestore fetch failed, using temporary salt');
         const tempSalt = await SecureStore.getItemAsync(TEMP_SALT_KEY);
         if (tempSalt) {
-            return { 
-                success: true, 
-                salt: tempSalt, 
-                isTemporary: true 
+            return {
+                success: true,
+                salt: tempSalt,
+                isTemporary: true
             };
         }
     }
@@ -192,7 +195,7 @@ const getUserSaltFromCloud = async (userId, requireOnline = false) => {
     console.log('🆕 Generating new salt for user:', userId);
     const newSalt = generateRandomSalt();
     console.log('🔑 Generated salt (length:', newSalt.length, ')');
-    
+
     try {
         // Save to Firestore (merge: true ensures we don't overwrite existing data)
         const userRef = doc(firestore, 'users', userId);
@@ -200,7 +203,7 @@ const getUserSaltFromCloud = async (userId, requireOnline = false) => {
             userSalt: newSalt,
             lastUpdated: new Date().toISOString()
         };
-        
+
         // Only add createdAt if document doesn't exist
         const userDoc = await getDoc(userRef);
         if (!userDoc.exists()) {
@@ -213,15 +216,15 @@ const getUserSaltFromCloud = async (userId, requireOnline = false) => {
                 saltData.subscriptionTier = 'free';
             }
         }
-        
+
         console.log('💾 Saving salt to Firestore:', {
             path: `users/${userId}`,
             database: 'keyvault-pro-india',
             fields: Object.keys(saltData)
         });
-        
+
         await setDoc(userRef, saltData, { merge: true });
-        
+
         // Verify it was saved
         const verifyDoc = await getDoc(userRef);
         if (verifyDoc.exists() && verifyDoc.data().userSalt) {
@@ -229,11 +232,11 @@ const getUserSaltFromCloud = async (userId, requireOnline = false) => {
         } else {
             console.error('❌ Salt save verification failed - salt not found after save!');
         }
-        
+
         // Cache locally
         await SecureStore.setItemAsync(SALT_KEY, newSalt);
         console.log('✅ Salt cached locally');
-        
+
         console.log('✅ Generated and saved new user salt');
         return { success: true, salt: newSalt, isTemporary: false };
     } catch (error) {
@@ -241,16 +244,16 @@ const getUserSaltFromCloud = async (userId, requireOnline = false) => {
         console.error('Error code:', error.code);
         console.error('Error message:', error.message);
         console.error('Error stack:', error.stack);
-        
+
         // Save temporarily and sync later
         await SecureStore.setItemAsync(TEMP_SALT_KEY, newSalt);
         await SecureStore.setItemAsync(TEMP_SALT_FLAG, 'true');
         console.log('⚠️ Salt saved temporarily, will sync later');
-        
-        return { 
-            success: true, 
-            salt: newSalt, 
-            isTemporary: true 
+
+        return {
+            success: true,
+            salt: newSalt,
+            isTemporary: true
         };
     }
 };
@@ -262,29 +265,29 @@ const getUserSaltFromCloud = async (userId, requireOnline = false) => {
 const getUserSaltLocal = async () => {
     const SALT_KEY = 'userSalt_local';
     const LOCAL_SALT_KEY = 'local_user_salt'; // Store for migration
-    
+
     try {
         // Check if salt exists locally
         let salt = await SecureStore.getItemAsync(SALT_KEY);
-        
+
         if (salt) {
             // Also store in migration key for later use
             await SecureStore.setItemAsync(LOCAL_SALT_KEY, salt);
             return { success: true, salt, isTemporary: false };
         }
-        
+
         // Generate new salt (first-time setup)
         salt = generateRandomSalt();
         await SecureStore.setItemAsync(SALT_KEY, salt);
         await SecureStore.setItemAsync(LOCAL_SALT_KEY, salt); // Store for migration
-        
+
         console.log('✅ Generated local-only salt');
         return { success: true, salt, isTemporary: false };
     } catch (error) {
         console.error('Error managing local salt:', error);
-        return { 
-            success: false, 
-            error: error.message || 'Failed to get local salt' 
+        return {
+            success: false,
+            error: error.message || 'Failed to get local salt'
         };
     }
 };
@@ -309,41 +312,41 @@ export const syncTemporarySalt = async (userId) => {
 
         const tempSalt = await SecureStore.getItemAsync(TEMP_SALT_KEY);
         if (!tempSalt) {
-            return { 
-                success: false, 
+            return {
+                success: false,
                 error: 'Temporary salt not found',
-                requiresReEncryption: false 
+                requiresReEncryption: false
             };
         }
 
         // Check if salt already exists in Firestore
         const userRef = doc(firestore, 'users', userId);
         const userDoc = await getDoc(userRef);
-        
+
         if (userDoc.exists() && userDoc.data().userSalt) {
             // Salt already exists in Firestore - this means another device created it first
             const existingSalt = userDoc.data().userSalt;
             const localSalt = tempSalt;
-            
+
             // Check if salts are different (salt conflict detected)
             if (existingSalt !== localSalt) {
                 console.log('⚠️ Salt conflict detected: Cloud salt differs from local temporary salt');
                 console.log('🔄 Will re-encrypt local entries with cloud salt');
-                
+
                 // Store both salts temporarily for re-encryption
                 await SecureStore.setItemAsync(`old_salt_${userId}`, localSalt);
                 await SecureStore.setItemAsync(`new_salt_${userId}`, existingSalt);
                 await SecureStore.setItemAsync('SALT_MIGRATION_REQUIRED', 'true');
             }
-            
+
             // Use the cloud salt (authoritative)
             await SecureStore.setItemAsync(`userSalt_${userId}`, existingSalt);
             await SecureStore.deleteItemAsync(TEMP_SALT_KEY);
             await SecureStore.deleteItemAsync(TEMP_SALT_FLAG);
-            
+
             console.log('✅ Using existing salt from Firestore, cleared temporary salt');
-            return { 
-                success: true, 
+            return {
+                success: true,
                 requiresReEncryption: existingSalt !== localSalt,
                 oldSalt: existingSalt !== localSalt ? localSalt : null,
                 newSalt: existingSalt
@@ -356,7 +359,7 @@ export const syncTemporarySalt = async (userId) => {
             userSalt: tempSalt,
             lastUpdated: new Date().toISOString()
         };
-        
+
         if (!userDoc.exists()) {
             saltData.createdAt = new Date().toISOString();
             saltData.subscriptionTier = 'free'; // Add subscriptionTier for new users
@@ -367,7 +370,7 @@ export const syncTemporarySalt = async (userId) => {
                 saltData.subscriptionTier = 'free';
             }
         }
-        
+
         await setDoc(userRef, saltData, { merge: true });
 
         // Move from temporary to permanent storage
@@ -376,15 +379,15 @@ export const syncTemporarySalt = async (userId) => {
         await SecureStore.deleteItemAsync(TEMP_SALT_FLAG);
 
         console.log('✅ Synced temporary salt to Firestore');
-        return { 
-            success: true, 
-            requiresReEncryption: false 
+        return {
+            success: true,
+            requiresReEncryption: false
         };
     } catch (error) {
         console.error('Error syncing temporary salt:', error);
-        return { 
-            success: false, 
-            error: error.message || 'Failed to sync temporary salt' 
+        return {
+            success: false,
+            error: error.message || 'Failed to sync temporary salt'
         };
     }
 };
@@ -454,21 +457,131 @@ export const forceFetchSaltFromCloud = async (userId) => {
     try {
         const userRef = doc(firestore, 'users', userId);
         const userDoc = await getDoc(userRef);
-        
+
         if (userDoc.exists() && userDoc.data().userSalt) {
             const salt = userDoc.data().userSalt;
             await SecureStore.setItemAsync(`userSalt_${userId}`, salt);
-            
+
             // Clear temporary salt
             await SecureStore.deleteItemAsync(TEMP_SALT_KEY);
             await SecureStore.deleteItemAsync(TEMP_SALT_FLAG);
-            
+
             return { success: true, salt };
         }
-        
+
         return { success: false, error: 'Salt not found in Firestore' };
     } catch (error) {
         console.error('Error force fetching salt:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+/**
+ * Verify that local salt matches cloud salt (Split-Brain Protection)
+ * Enforces "Cloud is Authority" rule.
+ * 
+ * Frequency:
+ * - Runs fully only once per app session (performance optimization)
+ * - Or if forceCheck is true (triggered by decryption failure)
+ * 
+ * @param {string} userId - Firebase User ID
+ * @param {boolean} forceCheck - Force remote verification (e.g. after decryption error)
+ * @returns {Promise<{success: boolean, requiresReEncryption?: boolean, targetSalt?: string, error?: string}>}
+ */
+export const verifySaltIntegrity = async (userId, forceCheck = false) => {
+    try {
+        if (!userId) return { success: false, error: 'User ID required' };
+
+        // PERF: Skip if verified recently (in this session) and not forced
+        const now = Date.now();
+        if (!forceCheck && lastSaltVerificationTime > 0) {
+            console.log('⚡ Salt integrity already verified this session, skipping remote check');
+            return { success: true, requiresReEncryption: false };
+        }
+
+        console.log('🛡️ Verifying Salt Integrity (Cloud Authority Check)...');
+
+        // 1. Get Local Salt
+        const localSaltArg = await getUserSaltLocal();
+        const localSalt = localSaltArg.salt;
+
+        if (!localSalt) {
+            // Should not happen if app is initialized, but if so, just return
+            return { success: true };
+        }
+
+        // 2. Get Cloud Salt (Live Fetch)
+        const online = await isOnline();
+        if (!online) {
+            console.log('⚠️ Offline: Skipping salt integrity check');
+            return { success: true }; // Can't verify if offline
+        }
+
+        const userRef = doc(firestore, 'users', userId);
+        const userDoc = await getDoc(userRef);
+
+        if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const cloudSalt = userData.userSalt;
+
+            if (cloudSalt) {
+                // 3. Compare
+                if (cloudSalt !== localSalt) {
+                    console.log('🚨 SALT MISMATCH DETECTED!');
+                    console.log('🔴 Local:', localSalt);
+                    console.log('🟢 Cloud:', cloudSalt);
+                    console.log('🔧 Enforcing Cloud Authority...');
+
+                    // Prepare for re-encryption flags
+                    await SecureStore.setItemAsync(`old_salt_${userId}`, localSalt);
+                    await SecureStore.setItemAsync(`new_salt_${userId}`, cloudSalt);
+                    await SecureStore.setItemAsync('SALT_MIGRATION_REQUIRED', 'true');
+
+                    // Update authoritative salt immediately (Cloud wins for future ops)
+                    await SecureStore.setItemAsync(`userSalt_${userId}`, cloudSalt);
+                    // Also update legacy local salt key to match so future checks pass
+                    await SecureStore.setItemAsync('userSalt_local', cloudSalt);
+
+                    // Stop verification loop for this session
+                    lastSaltVerificationTime = Date.now();
+
+                    // 4. Return instructions to re-encrypt
+                    // The actual re-encryption happens in HybridStorageService
+                    return {
+                        success: true,
+                        requiresReEncryption: true,
+                        targetSalt: cloudSalt
+                    };
+                } else {
+                    console.log('✅ Salt Integrity Verified: Match');
+                }
+            } else {
+                // Cloud user exists but has no salt? This is weird.
+                // We should upload our local salt to fix this.
+                console.warn('⚠️ Cloud user missing salt. Uploading local salt...');
+                await setDoc(userRef, { userSalt: localSalt }, { merge: true });
+                console.log('✅ Local salt uploaded to cloud');
+            }
+        } else {
+            // Cloud user doesn't exist? (First sync ever?)
+            // We should upload our local salt.
+            console.warn('⚠️ User doc missing in cloud. Uploading local salt...');
+            await setDoc(userRef, {
+                userSalt: localSalt,
+                createdAt: new Date().toISOString(),
+                lastUpdated: new Date().toISOString(),
+                subscriptionTier: 'free'
+            }, { merge: true });
+            console.log('✅ Local salt uploaded to new cloud doc');
+        }
+
+        // Update verification timestamp
+        lastSaltVerificationTime = now;
+        return { success: true, requiresReEncryption: false };
+
+    } catch (error) {
+        console.error('❌ Error verifying salt integrity:', error);
+        // Don't block sync on error, just warn
         return { success: false, error: error.message };
     }
 };

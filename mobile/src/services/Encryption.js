@@ -1,12 +1,12 @@
 import CryptoJS from 'crypto-js';
 import * as SecureStore from 'expo-secure-store';
 import { ENCRYPTION_CONFIG, ENCRYPTION_MODES } from '../config/EncryptionConfig';
-import { 
-    getUserSalt, 
-    syncTemporarySalt, 
-    isSaltMigrationRequired, 
-    getMigrationSalts, 
-    clearSaltMigrationFlags 
+import {
+    getUserSalt,
+    syncTemporarySalt,
+    isSaltMigrationRequired,
+    getMigrationSalts,
+    clearSaltMigrationFlags
 } from './UserSaltService';
 import { getCurrentUser } from './FirebaseAuthService';
 import * as Database from './Database';
@@ -104,9 +104,9 @@ export const setupMasterPassword = async (password, requireOnline = false) => {
         // 1. Get user-specific salt (handles offline scenario)
         const saltResult = await getUserSalt(requireOnline);
         if (!saltResult.success) {
-            return { 
-                success: false, 
-                error: saltResult.error || 'Failed to get user salt. Please check your internet connection.' 
+            return {
+                success: false,
+                error: saltResult.error || 'Failed to get user salt. Please check your internet connection.'
             };
         }
 
@@ -149,9 +149,9 @@ export const setupMasterPassword = async (password, requireOnline = false) => {
             }
         }
 
-        return { 
-            success: true, 
-            isTemporarySalt 
+        return {
+            success: true,
+            isTemporarySalt
         };
     } catch (error) {
         console.error('Error setting master password:', error);
@@ -233,14 +233,14 @@ const getEncryptionKey = async () => {
             if (saltResult.success && saltResult.salt) {
                 console.log('✅ Salt retrieved, deriving encryption key...');
                 const derivedKey = CryptoJS.PBKDF2(
-                    masterPasswordResult.masterPassword, 
-                    saltResult.salt, 
+                    masterPasswordResult.masterPassword,
+                    saltResult.salt,
                     {
                         keySize: 256 / 32,
                         iterations: ENCRYPTION_CONFIG.KEY_DERIVATION_ITERATIONS
                     }
                 ).toString();
-                
+
                 // Cache the derived key
                 await SecureStore.setItemAsync(ENCRYPTION_KEY_KEY, derivedKey);
                 console.log('✅ Encryption key derived and cached');
@@ -254,8 +254,8 @@ const getEncryptionKey = async () => {
         // This handles existing users who haven't migrated yet
         if (masterPasswordResult.success && masterPasswordResult.masterPassword) {
             const legacyKey = CryptoJS.PBKDF2(
-                masterPasswordResult.masterPassword, 
-                ENCRYPTION_CONFIG.PBKDF2_SALT, 
+                masterPasswordResult.masterPassword,
+                ENCRYPTION_CONFIG.PBKDF2_SALT,
                 {
                     keySize: 256 / 32,
                     iterations: ENCRYPTION_CONFIG.KEY_DERIVATION_ITERATIONS
@@ -325,12 +325,18 @@ const decryptWithSalt = (encryptedPassword, masterPassword, salt) => {
             keySize: 256 / 32,
             iterations: ENCRYPTION_CONFIG.KEY_DERIVATION_ITERATIONS
         }).toString();
-        
+
         const bytes = CryptoJS.AES.decrypt(encryptedPassword, derivedKey);
         const decrypted = bytes.toString(CryptoJS.enc.Utf8);
         return decrypted || encryptedPassword; // Fallback if decryption fails
     } catch (error) {
-        console.error('Error decrypting with salt:', error);
+        // Malformed UTF-8 data is expected if we try the wrong key (wrong salt) during migration checks
+        if (error.message && error.message.includes('Malformed UTF-8')) {
+            // Use console.log instead of error/warn to avoid UI Overlay
+            console.log('ℹ️ Decryption check failed (wrong salt candidate)');
+        } else {
+            console.log('⚠️ Error decrypting with salt:', error);
+        }
         return encryptedPassword;
     }
 };
@@ -349,7 +355,7 @@ const encryptWithSalt = (password, masterPassword, salt) => {
             keySize: 256 / 32,
             iterations: ENCRYPTION_CONFIG.KEY_DERIVATION_ITERATIONS
         }).toString();
-        
+
         return CryptoJS.AES.encrypt(password, derivedKey).toString();
     } catch (error) {
         console.error('Error encrypting with salt:', error);
@@ -374,9 +380,9 @@ export const reEncryptAllPasswords = async (userId) => {
         // Get master password
         const masterPasswordResult = await getMasterPassword();
         if (!masterPasswordResult.success || !masterPasswordResult.masterPassword) {
-            return { 
-                success: false, 
-                error: 'Master password required for re-encryption' 
+            return {
+                success: false,
+                error: 'Master password required for re-encryption'
             };
         }
 
@@ -385,13 +391,15 @@ export const reEncryptAllPasswords = async (userId) => {
         // Get old and new salts
         const { oldSalt, newSalt } = await getMigrationSalts(userId);
         if (!oldSalt || !newSalt) {
-            return { 
-                success: false, 
-                error: 'Migration salts not found' 
+            return {
+                success: false,
+                error: 'Migration salts not found'
             };
         }
 
         console.log('🔄 Starting password re-encryption with new salt...');
+        console.log(`🔍 DEBUG: Old Salt (prefix): ${oldSalt.substring(0, 6)}...`);
+        console.log(`🔍 DEBUG: New Salt (prefix): ${newSalt.substring(0, 6)}...`);
 
         // Get all local passwords
         const localPasswords = Database.getPasswords();
@@ -404,10 +412,16 @@ export const reEncryptAllPasswords = async (userId) => {
                 // Skip if already synced to cloud (cloud entries use cloud salt)
                 // Only re-encrypt local-only entries (not synced yet)
                 // cloudSynced can be 1 (synced), 0 (not synced), or undefined/null (legacy)
+
+                // CRITICAL FIX: Even synced passwords might be encrypted with the WRONG local salt
+                // if we are in a Split-Brain scenario. We must try to decrypt everything with
+                // the old salt and migrate it if successful.
+
+                /* 
                 if (passwordEntry.cloudSynced === 1) {
-                    // This entry came from cloud, already encrypted with cloud salt
                     continue;
                 }
+                */
 
                 // Decrypt with old salt
                 const decryptedPassword = decryptWithSalt(
@@ -424,12 +438,12 @@ export const reEncryptAllPasswords = async (userId) => {
                         masterPassword,
                         newSalt
                     );
-                    
+
                     if (testDecrypt !== passwordEntry.encryptedPassword) {
                         // Already encrypted with new salt, skip
                         continue;
                     }
-                    
+
                     // Can't decrypt with either salt - might be legacy or corrupted
                     console.warn(`⚠️ Could not decrypt password ${passwordEntry.id}, skipping`);
                     failedCount++;
@@ -477,16 +491,16 @@ export const reEncryptAllPasswords = async (userId) => {
 
         console.log(`✅ Re-encryption complete: ${reEncryptedCount} passwords re-encrypted, ${failedCount} failed`);
 
-        return { 
-            success: true, 
+        return {
+            success: true,
             reEncryptedCount,
-            failedCount 
+            failedCount
         };
     } catch (error) {
         console.error('Error in re-encryption:', error);
-        return { 
-            success: false, 
-            error: error.message || 'Failed to re-encrypt passwords' 
+        return {
+            success: false,
+            error: error.message || 'Failed to re-encrypt passwords'
         };
     }
 };
