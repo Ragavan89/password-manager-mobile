@@ -49,3 +49,24 @@ yarn-error.*
 
 # OS
 Thumbs.db
+
+# Windows
+*.ps1
+*.exe
+*.cmd
+
+# Logs
+*.log
+
+# Build Artifacts
+*.apk
+*.aab
+*.apks
+
+# Tests
+test-results/
+junit.xml
+
+# Mobile - Generated Native Folders (CNG)
+mobile/android/
+mobile/ios/
