@@ -1,9 +1,22 @@
+/**
+ * LoginScreen.js
+ * 
+ * PIN-based login screen for app authentication.
+ * 
+ * Features:
+ * - 4-digit PIN entry with visual feedback
+ * - Biometric authentication support
+ * - Forgot PIN flow (device authentication + reset)
+ * - Terms of Service and Privacy Policy links
+ * 
+ * Navigation: Login → Home (if master password set) or SetupMasterPassword
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import { View, TextInput, Text, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, Modal, ScrollView, ActivityIndicator } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import CustomAlert from '../components/CustomAlert';
-import { isMasterPasswordSet, isPINSet, verifyPIN } from '../services/Encryption';
-import { setupPin } from '../services/AuthService';
+import { isMasterPasswordSet, isPINSet, verifyPIN, setupPIN } from '../services/Encryption';
 
 export default function LoginScreen({ navigation }) {
     const [pin, setPin] = useState('');
@@ -146,7 +159,7 @@ export default function LoginScreen({ navigation }) {
         setIsResettingPin(true);
         try {
             // Save the new PIN securely
-            const result = await setupPin(newPin);
+            const result = await setupPIN(newPin);
 
             if (result.success) {
                 Alert.alert(
@@ -249,9 +262,16 @@ export default function LoginScreen({ navigation }) {
                 transparent={true}
                 onRequestClose={() => setShowResetModal(false)}
             >
-                <View style={styles.modalOverlay}>
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.modalOverlay}
+                >
                     <View style={styles.modalContent}>
-                        <ScrollView>
+                        <ScrollView
+                            keyboardShouldPersistTaps="handled"
+                            contentContainerStyle={{ paddingRight: 12 }}
+                            showsVerticalScrollIndicator={true}
+                        >
                             <View style={styles.modalHeader}>
                                 <Text style={styles.modalIcon}>✅</Text>
                                 <Text style={styles.modalTitle}>Identity Verified</Text>
@@ -316,7 +336,7 @@ export default function LoginScreen({ navigation }) {
                             </View>
                         </ScrollView>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
             {/* Footer with Copyright & Legal */}
             <View style={styles.footer}>
@@ -464,6 +484,7 @@ const styles = StyleSheet.create({
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         padding: 24,
+        paddingBottom: 40,
         maxHeight: '80%',
     },
     modalHeader: {
@@ -502,6 +523,7 @@ const styles = StyleSheet.create({
         borderColor: '#dee2e6',
         borderRadius: 12,
         padding: 16,
+        marginRight: 8,
         fontSize: 24,
         textAlign: 'center',
         letterSpacing: 8,

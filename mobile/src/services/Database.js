@@ -1,3 +1,16 @@
+/**
+ * Database.js
+ * 
+ * Local SQLite database service for password storage.
+ * Handles CRUD operations for passwords with support for:
+ * - Web (localStorage fallback) and Native (SQLite) platforms
+ * - Soft delete with tombstones for cloud sync
+ * - Cloud sync status tracking
+ * 
+ * All passwords are stored encrypted - this service only handles storage,
+ * not encryption/decryption (see Encryption.js for that).
+ */
+
 import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
 import * as Crypto from 'expo-crypto';

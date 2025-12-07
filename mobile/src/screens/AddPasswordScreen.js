@@ -1,3 +1,18 @@
+/**
+ * AddPasswordScreen.js
+ * 
+ * Screen for creating and editing password entries.
+ * 
+ * Features:
+ * - Add new password with site, username, password, comments
+ * - Edit existing password entries
+ * - Password strength indicator
+ * - Automatic encryption before storage
+ * - Offline and cloud sync status feedback
+ * 
+ * Uses: HybridStorageService (save/update), Encryption (encrypt/decrypt)
+ */
+
 import React, { useState, useRef, useEffect } from 'react';
 import { View, TextInput, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import * as HybridStorageService from '../services/HybridStorageService';
@@ -106,7 +121,7 @@ export default function AddPasswordScreen({ navigation, route }) {
                     const cloudSyncEnabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
                     const user = getCurrentUser();
                     const isCloudSyncActive = cloudSyncEnabled === 'true' && user !== null;
-                    
+
                     setAlertConfig({
                         visible: true,
                         title: 'Updated Locally',
@@ -130,7 +145,7 @@ export default function AddPasswordScreen({ navigation, route }) {
                     const cloudSyncEnabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
                     const user = getCurrentUser();
                     const isCloudSyncActive = cloudSyncEnabled === 'true' && user !== null;
-                    
+
                     setAlertConfig({
                         visible: true,
                         title: 'Updated Locally',
@@ -155,7 +170,7 @@ export default function AddPasswordScreen({ navigation, route }) {
                     const cloudSyncEnabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
                     const user = getCurrentUser();
                     const isCloudSyncActive = cloudSyncEnabled === 'true' && user !== null;
-                    
+
                     setAlertConfig({
                         visible: true,
                         title: 'Saved Locally',
@@ -187,7 +202,7 @@ export default function AddPasswordScreen({ navigation, route }) {
                     const cloudSyncEnabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
                     const user = getCurrentUser();
                     const isCloudSyncActive = cloudSyncEnabled === 'true' && user !== null;
-                    
+
                     setAlertConfig({
                         visible: true,
                         title: 'Saved Locally',

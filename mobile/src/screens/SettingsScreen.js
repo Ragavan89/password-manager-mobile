@@ -1,9 +1,24 @@
+/**
+ * SettingsScreen.js
+ * 
+ * App settings and cloud sync management screen.
+ * 
+ * Features:
+ * - Cloud sync enable/disable and status display
+ * - Sync now button with progress feedback
+ * - Subscription tier display
+ * - View master password (PIN protected)
+ * - Sign out from cloud sync
+ * 
+ * Uses: HybridStorageService (sync), FirebaseAuthService (auth), Encryption (PIN verify)
+ */
+
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, Alert, ScrollView, TouchableOpacity, Modal, ActivityIndicator, TextInput, Platform } from 'react-native';
+import { View, StyleSheet, Text, Alert, ScrollView, TouchableOpacity, Modal, ActivityIndicator, TextInput, Platform, KeyboardAvoidingView } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as Clipboard from 'expo-clipboard';
-import { verifyPIN } from '../services/Encryption';
-import { getMasterPassword } from '../services/Encryption';
+import { verifyPIN, getMasterPassword, clearEncryptionKeyCache } from '../services/Encryption';
+import { clearUserSaltCache } from '../services/UserSaltService';
 import { isMasterPasswordRequired } from '../config/EncryptionConfig';
 import { getCurrentUser, signOut } from '../services/FirebaseAuthService';
 import { syncToCloud, getLastSyncTime, getCloudPasswordLimit, getSubscriptionTierLimits } from '../services/HybridStorageService';
@@ -137,6 +152,17 @@ export default function SettingsScreen({ navigation }) {
                     style: 'destructive',
                     onPress: async () => {
                         try {
+                            // CRITICAL: Get userId BEFORE signing out
+                            const user = getCurrentUser();
+                            const userId = user?.uid;
+
+                            // Clear encryption state BEFORE signing out to prevent stale cached keys
+                            // This fixes the bug where cloud passwords can't be decrypted after logout/login cycle
+                            if (userId) {
+                                await clearUserSaltCache(userId);
+                            }
+                            await clearEncryptionKeyCache();
+
                             await signOut();
                             await SecureStore.deleteItemAsync('CLOUD_SYNC_ENABLED');
                             await SecureStore.deleteItemAsync('FIREBASE_USER_EMAIL');
@@ -146,6 +172,7 @@ export default function SettingsScreen({ navigation }) {
                             setLastSyncTime(null);
                             Alert.alert('Success', 'Cloud sync disabled');
                         } catch (error) {
+                            console.error('Error disabling cloud sync:', error);
                             Alert.alert('Error', 'Failed to disable cloud sync');
                         }
                     }
@@ -437,7 +464,10 @@ export default function SettingsScreen({ navigation }) {
                     animationType="fade"
                     onRequestClose={handleClosePinModal}
                 >
-                    <View style={styles.modalOverlay}>
+                    <KeyboardAvoidingView
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        style={styles.modalOverlay}
+                    >
                         <View style={styles.modalContent}>
                             <Text style={styles.modalTitle}>Enter Your PIN</Text>
                             <Text style={styles.modalDescription}>
@@ -475,7 +505,7 @@ export default function SettingsScreen({ navigation }) {
                                 </TouchableOpacity>
                             </View>
                         </View>
-                    </View>
+                    </KeyboardAvoidingView>
                 </Modal>
 
                 {/* Master Password Display Modal */}

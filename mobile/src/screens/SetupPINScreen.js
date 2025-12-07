@@ -1,3 +1,17 @@
+/**
+ * SetupPINScreen.js
+ * 
+ * First-time PIN creation screen (part of initial app setup).
+ * 
+ * Features:
+ * - 4-digit PIN entry with visual dots
+ * - Two-step flow: create PIN → confirm PIN
+ * - PIN tips for choosing secure PINs
+ * - Keyboard-avoiding layout
+ * 
+ * Navigation: App Launch (first time) → SetupPIN → SetupMasterPassword
+ */
+
 import React, { useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { setupPIN } from '../services/Encryption';

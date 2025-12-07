@@ -1,3 +1,19 @@
+/**
+ * UserSaltService.js
+ * 
+ * Per-user cryptographic salt management service.
+ * Ensures each user has a unique salt for PBKDF2 key derivation.
+ * 
+ * Key features:
+ * - Unique salt per user (prevents cross-user key collision)
+ * - Offline support with temporary salt generation
+ * - Cloud-local salt synchronization
+ * - Split-brain protection (cloud is authority)
+ * - Salt migration for cross-device sync
+ * 
+ * Flow: Encryption.js → UserSaltService.js → Firestore (cloud) / SecureStore (local)
+ */
+
 import * as SecureStore from 'expo-secure-store';
 import { getCurrentUser } from './FirebaseAuthService';
 import { doc, getDoc, setDoc, getFirestore } from 'firebase/firestore';
@@ -5,6 +21,7 @@ import { app } from '../../firebase.config';
 import NetInfo from '@react-native-community/netinfo';
 import CryptoJS from 'crypto-js';
 import { ENCRYPTION_CONFIG } from '../config/EncryptionConfig';
+import { clearEncryptionKeyCache } from './Encryption';
 
 // EXPLICITLY get the named database instance
 const firestore = getFirestore(app, 'keyvault-pro-india');
@@ -344,6 +361,11 @@ export const syncTemporarySalt = async (userId) => {
             await SecureStore.deleteItemAsync(TEMP_SALT_KEY);
             await SecureStore.deleteItemAsync(TEMP_SALT_FLAG);
 
+            // CRITICAL: If salts differ, clear cached encryption key to force re-derivation
+            if (existingSalt !== localSalt) {
+                await clearEncryptionKeyCache();
+            }
+
             console.log('✅ Using existing salt from Firestore, cleared temporary salt');
             return {
                 success: true,
@@ -542,6 +564,10 @@ export const verifySaltIntegrity = async (userId, forceCheck = false) => {
                     // Also update legacy local salt key to match so future checks pass
                     await SecureStore.setItemAsync('userSalt_local', cloudSalt);
 
+                    // CRITICAL: Clear cached encryption key to force re-derivation with new salt
+                    // This prevents the key/salt mismatch that causes decryption failures
+                    await clearEncryptionKeyCache();
+
                     // Stop verification loop for this session
                     lastSaltVerificationTime = Date.now();
 
@@ -586,4 +612,46 @@ export const verifySaltIntegrity = async (userId, forceCheck = false) => {
     }
 };
 
+/**
+ * Clear salt cache for a specific user (call on logout)
+ * This ensures fresh salt fetch from Firestore on next login.
+ * 
+ * IMPORTANT: Must be called when user signs out to prevent stale salt
+ * from being used when logging back in (especially after offline operations).
+ * 
+ * @param {string} userId - Firebase user ID to clear cache for
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export const clearUserSaltCache = async (userId) => {
+    try {
+        // Clear user-specific salt
+        if (userId) {
+            await SecureStore.deleteItemAsync(`userSalt_${userId}`);
+            await SecureStore.deleteItemAsync(`old_salt_${userId}`);
+            await SecureStore.deleteItemAsync(`new_salt_${userId}`);
+        }
 
+        // Clear temporary salt flags
+        await SecureStore.deleteItemAsync(TEMP_SALT_KEY);
+        await SecureStore.deleteItemAsync(TEMP_SALT_FLAG);
+        await SecureStore.deleteItemAsync('SALT_MIGRATION_REQUIRED');
+
+        // Reset session-level verification cache to force re-verification on login
+        lastSaltVerificationTime = 0;
+
+        console.log('✅ User salt cache cleared for user:', userId || 'local');
+        return { success: true };
+    } catch (error) {
+        console.error('Error clearing salt cache:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+/**
+ * Reset salt verification flag (forces re-verification on next sync)
+ * Call this when transitioning from offline to online to ensure salt integrity.
+ */
+export const resetSaltVerification = () => {
+    lastSaltVerificationTime = 0;
+    console.log('🔄 Salt verification reset - will re-verify on next sync');
+};

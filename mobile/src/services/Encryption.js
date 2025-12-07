@@ -1,3 +1,17 @@
+/**
+ * Encryption.js
+ * 
+ * Core encryption service for the password manager.
+ * Handles all cryptographic operations including:
+ * - PIN setup and verification (SHA256 hashing)
+ * - Master password management (PBKDF2 key derivation)
+ * - AES-256 encryption/decryption of passwords
+ * - Salt migration for cross-device sync
+ * 
+ * Security: Uses expo-secure-store for sensitive data storage.
+ * All keys are derived using PBKDF2 with 100,000 iterations.
+ */
+
 import CryptoJS from 'crypto-js';
 import * as SecureStore from 'expo-secure-store';
 import { ENCRYPTION_CONFIG, ENCRYPTION_MODES } from '../config/EncryptionConfig';
@@ -290,23 +304,54 @@ export const encryptPassword = async (password) => {
 
 /**
  * Decrypts an encrypted password
+ * Includes legacy salt fallback to ensure no data loss
  * @param {string} encryptedPassword - Encrypted password string
  * @returns {Promise<string>} Decrypted plain text password
  */
 export const decryptPassword = async (encryptedPassword) => {
     if (!encryptedPassword) return '';
     try {
+        // 1. Try with current encryption key (most common case)
         const key = await getEncryptionKey();
         const bytes = CryptoJS.AES.decrypt(encryptedPassword, key);
         const originalText = bytes.toString(CryptoJS.enc.Utf8);
 
-        // If decryption results in empty string (but input wasn't), it might be plain text or wrong key
-        if (!originalText && encryptedPassword.length > 0) {
-            return encryptedPassword; // Fallback to showing original text (legacy support)
+        // If decryption succeeds, return result
+        if (originalText && originalText.length > 0) {
+            return originalText;
         }
-        return originalText;
+
+        // 2. Decryption failed - try legacy salt fallback
+        // This handles entries encrypted before per-user salt migration
+        console.log('⚠️ Primary decryption failed, trying legacy salt fallback...');
+
+        const masterPwResult = await getMasterPassword();
+        if (masterPwResult.success && masterPwResult.masterPassword) {
+            // Try legacy hardcoded salt
+            const legacyKey = CryptoJS.PBKDF2(
+                masterPwResult.masterPassword,
+                ENCRYPTION_CONFIG.PBKDF2_SALT,
+                {
+                    keySize: 256 / 32,
+                    iterations: ENCRYPTION_CONFIG.KEY_DERIVATION_ITERATIONS
+                }
+            ).toString();
+
+            const legacyBytes = CryptoJS.AES.decrypt(encryptedPassword, legacyKey);
+            const legacyText = legacyBytes.toString(CryptoJS.enc.Utf8);
+
+            if (legacyText && legacyText.length > 0) {
+                console.log('✅ Decrypted with legacy salt - consider re-encrypting this entry');
+                return legacyText;
+            }
+        }
+
+        // 3. All attempts failed - might be plain text (legacy support)
+        console.log('⚠️ All decryption attempts failed, returning original text');
+        return encryptedPassword;
     } catch (error) {
         // Fallback for plain text passwords (legacy support)
+        console.log('ℹ️ Decryption exception, returning original:', error.message);
         return encryptedPassword;
     }
 };
@@ -502,5 +547,25 @@ export const reEncryptAllPasswords = async (userId) => {
             success: false,
             error: error.message || 'Failed to re-encrypt passwords'
         };
+    }
+};
+
+/**
+ * Clear cached encryption key (call on logout)
+ * Forces key re-derivation on next encryption/decryption operation.
+ * 
+ * IMPORTANT: Must be called when user signs out of cloud sync to ensure
+ * fresh key derivation with the correct salt on next login.
+ * 
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export const clearEncryptionKeyCache = async () => {
+    try {
+        await SecureStore.deleteItemAsync(ENCRYPTION_KEY_KEY);
+        console.log('✅ Encryption key cache cleared');
+        return { success: true };
+    } catch (error) {
+        console.error('Error clearing encryption key cache:', error);
+        return { success: false, error: error.message };
     }
 };

@@ -17,6 +17,7 @@
     },
     "android": {
       "package": "com.veni.keyvault",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -30,7 +31,8 @@
     "plugins": [
       "expo-sqlite",
       "expo-secure-store",
-      "./plugins/with-agp-fix.js"
+      "./plugins/with-agp-fix.js",
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {

@@ -1,3 +1,16 @@
+/**
+ * FirestoreService.js
+ * 
+ * Cloud Firestore service for remote password storage.
+ * Handles all direct Firestore operations including:
+ * - Password CRUD (Create, Read, Update, Delete)
+ * - User document management (subscription tiers, master password hash)
+ * - Real-time password subscriptions
+ * 
+ * Note: This service is called by HybridStorageService.js.
+ * Screens should NOT call this directly - use HybridStorageService instead.
+ */
+
 import {
     collection,
     doc,
@@ -48,7 +61,7 @@ export const savePassword = async (userId, passwordData) => {
         // Remove id and localId from data - ID is stored as document ID only
         // Map lastModified (from local DB) to lastUpdated (Firestore standard)
         const { id, localId, lastModified, ...dataToSave } = passwordData;
-        
+
         // Use lastModified if provided, otherwise use current time
         const lastUpdated = lastModified || new Date().toISOString();
 
@@ -112,11 +125,11 @@ export const updatePassword = async (userId, passwordId, passwordData) => {
         }
 
         const passwordRef = doc(firestore, 'users', userId, 'passwords', passwordId);
-        
+
         // Map lastModified (from local DB) to lastUpdated (Firestore standard)
         const { lastModified, ...dataToUpdate } = passwordData;
         const lastUpdated = lastModified || new Date().toISOString();
-        
+
         await updateDoc(passwordRef, {
             ...dataToUpdate,
             lastUpdated: lastUpdated

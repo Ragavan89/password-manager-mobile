@@ -1,3 +1,17 @@
+/**
+ * AuthScreen.js
+ * 
+ * Firebase authentication screen for enabling cloud sync.
+ * 
+ * Features:
+ * - Email/password sign in and sign up
+ * - Password reset via email
+ * - Salt migration for existing local passwords
+ * - Toggleable password visibility
+ * 
+ * Navigation: Settings → AuthScreen → Settings (on success)
+ */
+
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -134,17 +148,27 @@ export default function AuthScreen({ navigation }) {
 
                 // Button remains "Loading..." while Alert is shown, preventing double-tap
                 if (migrationResult.migrated) {
-                    Alert.alert(
-                        'Cloud Sync Enabled',
-                        `Cloud sync enabled! Migrated ${migrationResult.reEncryptedCount || 0} local passwords to use cloud encryption.`,
-                        [{ text: 'OK', onPress: () => navigation.goBack() }]
-                    );
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Cloud Sync Enabled',
+                        message: `Cloud sync enabled! Migrated ${migrationResult.reEncryptedCount || 0} local passwords to use cloud encryption.`,
+                        type: 'success',
+                        buttons: [{
+                            text: 'OK',
+                            onPress: () => navigation.goBack()
+                        }]
+                    });
                 } else {
-                    Alert.alert(
-                        'Success',
-                        'Cloud sync enabled! Your passwords will now be backed up to the cloud.',
-                        [{ text: 'OK', onPress: () => navigation.goBack() }]
-                    );
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Success',
+                        message: 'Cloud sync enabled! Your passwords will now be backed up to the cloud.',
+                        type: 'success',
+                        buttons: [{
+                            text: 'OK',
+                            onPress: () => navigation.goBack()
+                        }]
+                    });
                 }
             } catch (error) {
                 console.error('Error in post-signin setup:', error);

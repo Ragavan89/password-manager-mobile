@@ -1,3 +1,16 @@
+/**
+ * FirebaseAuthService.js
+ * 
+ * Firebase Authentication service for user management.
+ * Handles all authentication operations including:
+ * - Email/password sign up and sign in
+ * - Anonymous authentication
+ * - Password reset
+ * - Auth state change listeners
+ * 
+ * Used by: AuthScreen.js, HybridStorageService.js
+ */
+
 import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,

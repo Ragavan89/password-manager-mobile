@@ -56,7 +56,7 @@ export const ENCRYPTION_CONFIG = {
      * Higher = more secure but slower
      * 10000 is a good balance for mobile devices
      */
-    KEY_DERIVATION_ITERATIONS: 1000,
+    KEY_DERIVATION_ITERATIONS: 10000,
 
     /**
      * Salt for PBKDF2 key derivation

@@ -1,3 +1,17 @@
+/**
+ * AuthService.js
+ * 
+ * High-level authentication orchestration service.
+ * Coordinates between Encryption.js and screen components for:
+ * - First-time app setup (PIN + Master Password)
+ * - App setup status checks
+ * - Master password viewing (with PIN verification)
+ * - Password strength validation
+ * 
+ * Note: This is a facade over Encryption.js functions.
+ * Used by: Setup screens, Settings screen
+ */
+
 import * as SecureStore from 'expo-secure-store';
 import * as LocalAuthentication from 'expo-local-authentication';
 import CryptoJS from 'crypto-js';
@@ -6,177 +20,22 @@ import {
     setupMasterPassword as encryptionSetupMasterPassword,
     getMasterPassword as encryptionGetMasterPassword,
     isMasterPasswordSetup,
-    initializeAppSecretMode
+    initializeAppSecretMode,
+    isPINSet as isEncryptionPinSet,
+    setupPIN as encryptionSetupPin,
+    verifyPIN as encryptionVerifyPIN
 } from './Encryption';
 
 /**
  * Storage Keys
  */
-const PIN_HASH_KEY = 'USER_PIN_HASH';
-const PIN_SALT_KEY = 'PIN_SALT';
 
-/**
- * Generate or retrieve PIN salt
- * @returns {Promise<string>} PIN salt
- */
-const getPinSalt = async () => {
-    try {
-        let salt = await SecureStore.getItemAsync(PIN_SALT_KEY);
-        if (!salt) {
-            salt = CryptoJS.lib.WordArray.random(128 / 8).toString();
-            await SecureStore.setItemAsync(PIN_SALT_KEY, salt);
-        }
-        return salt;
-    } catch (error) {
-        console.error('Error getting PIN salt:', error);
-        throw error;
-    }
-};
-
-/**
- * Hash PIN with salt
- * @param {string} pin - PIN to hash
- * @param {string} salt - Salt for hashing
- * @returns {string} Hashed PIN
- */
-const hashPin = (pin, salt) => {
-    return CryptoJS.SHA256(pin + salt).toString();
-};
 
 /**
  * Check if PIN is set up
  * @returns {Promise<boolean>} True if PIN exists
  */
-export const isPinSetup = async () => {
-    try {
-        const pinHash = await SecureStore.getItemAsync(PIN_HASH_KEY);
-        return !!pinHash;
-    } catch (error) {
-        console.error('Error checking PIN setup:', error);
-        return false;
-    }
-};
 
-/**
- * Set up user PIN
- * @param {string} pin - User's PIN (should be 4 digits)
- * @returns {Promise<{success: boolean, error?: string}>}
- */
-export const setupPin = async (pin) => {
-    try {
-        if (!pin || pin.length !== 4) {
-            return { success: false, error: 'PIN must be exactly 4 digits' };
-        }
-
-        const salt = await getPinSalt();
-        const pinHash = hashPin(pin, salt);
-
-        await SecureStore.setItemAsync(PIN_HASH_KEY, pinHash);
-
-        console.log('✅ PIN setup complete');
-        return { success: true };
-    } catch (error) {
-        console.error('Error setting up PIN:', error);
-        return { success: false, error: error.message };
-    }
-};
-
-/**
- * Verify PIN
- * @param {string} pin - PIN to verify
- * @returns {Promise<{success: boolean, error?: string}>}
- */
-export const verifyPin = async (pin) => {
-    try {
-        const salt = await getPinSalt();
-        const pinHash = hashPin(pin, salt);
-        const storedPinHash = await SecureStore.getItemAsync(PIN_HASH_KEY);
-
-        if (pinHash === storedPinHash) {
-            return { success: true };
-        } else {
-            return { success: false, error: 'Incorrect PIN' };
-        }
-    } catch (error) {
-        console.error('Error verifying PIN:', error);
-        return { success: false, error: error.message };
-    }
-};
-
-/**
- * Change PIN
- * @param {string} oldPin - Current PIN
- * @param {string} newPin - New PIN
- * @returns {Promise<{success: boolean, error?: string}>}
- */
-export const changePin = async (oldPin, newPin) => {
-    try {
-        // Verify old PIN
-        const verifyResult = await verifyPin(oldPin);
-        if (!verifyResult.success) {
-            return { success: false, error: 'Incorrect old PIN' };
-        }
-
-        // Validate new PIN
-        if (!newPin || newPin.length !== 4) {
-            return { success: false, error: 'New PIN must be exactly 4 digits' };
-        }
-
-        // Set new PIN
-        const salt = await getPinSalt();
-        const newPinHash = hashPin(newPin, salt);
-        await SecureStore.setItemAsync(PIN_HASH_KEY, newPinHash);
-
-        console.log('✅ PIN changed successfully');
-        return { success: true };
-    } catch (error) {
-        console.error('Error changing PIN:', error);
-        return { success: false, error: error.message };
-    }
-};
-
-/**
- * Reset PIN using device biometric authentication
- * Master password remains accessible after PIN reset
- * @param {string} newPin - New PIN to set
- * @returns {Promise<{success: boolean, error?: string}>}
- */
-export const resetPinViaBiometric = async (newPin) => {
-    try {
-        // Check if biometric is available
-        const hasHardware = await LocalAuthentication.hasHardwareAsync();
-        if (!hasHardware) {
-            return { success: false, error: 'Biometric authentication not available on this device' };
-        }
-
-        // Authenticate with biometric
-        const result = await LocalAuthentication.authenticateAsync({
-            promptMessage: 'Verify your identity to reset PIN',
-            fallbackLabel: 'Use device password',
-            disableDeviceFallback: false,
-        });
-
-        if (!result.success) {
-            return { success: false, error: 'Biometric authentication failed' };
-        }
-
-        // Validate new PIN
-        if (!newPin || newPin.length !== 4) {
-            return { success: false, error: 'New PIN must be exactly 4 digits' };
-        }
-
-        // Set new PIN
-        const salt = await getPinSalt();
-        const newPinHash = hashPin(newPin, salt);
-        await SecureStore.setItemAsync(PIN_HASH_KEY, newPinHash);
-
-        console.log('✅ PIN reset via biometric successful');
-        return { success: true };
-    } catch (error) {
-        console.error('Error resetting PIN via biometric:', error);
-        return { success: false, error: error.message };
-    }
-};
 
 /**
  * Complete first-time setup
@@ -188,7 +47,7 @@ export const resetPinViaBiometric = async (newPin) => {
 export const completeFirstTimeSetup = async (pin, masterPassword = null) => {
     try {
         // Set up PIN
-        const pinResult = await setupPin(pin);
+        const pinResult = await encryptionSetupPin(pin);
         if (!pinResult.success) {
             return pinResult;
         }
@@ -226,7 +85,7 @@ export const completeFirstTimeSetup = async (pin, masterPassword = null) => {
  */
 export const isAppSetup = async () => {
     try {
-        const pinSetup = await isPinSetup();
+        const pinSetup = await isEncryptionPinSet();
 
         if (isMasterPasswordRequired()) {
             const masterPasswordSetup = await isMasterPasswordSetup();
@@ -254,8 +113,8 @@ export const viewMasterPassword = async (pin) => {
         }
 
         // Verify PIN
-        const verifyResult = await verifyPin(pin);
-        if (!verifyResult.success) {
+        const verifyResult = await encryptionVerifyPIN(pin);
+        if (!verifyResult) {
             return { success: false, error: 'Incorrect PIN' };
         }
 

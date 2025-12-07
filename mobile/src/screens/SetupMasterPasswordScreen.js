@@ -1,3 +1,18 @@
+/**
+ * SetupMasterPasswordScreen.js
+ * 
+ * First-time master password creation screen.
+ * 
+ * Features:
+ * - Password strength validation with visual indicator
+ * - Password confirmation step
+ * - Backup reminder screen before saving
+ * - Clipboard copy for backup
+ * - Network check for cloud sync users
+ * 
+ * Navigation: SetupPIN → SetupMasterPassword → Home
+ */
+
 import React, { useState, useEffect } from 'react';
 import {
     View,
@@ -155,8 +170,7 @@ export default function SetupMasterPasswordScreen({ navigation }) {
             <View style={styles.container}>
                 <ScrollView contentContainerStyle={styles.scrollContent}>
                     <View style={styles.header}>
-                        <Text style={styles.icon}>✅</Text>
-                        <Text style={styles.title}>Master Password Created!</Text>
+                        <Text style={styles.title}>✅ Master Password Created!</Text>
                         <Text style={styles.subtitle}>Save it now before continuing</Text>
                     </View>
 
@@ -357,19 +371,19 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         padding: 24,
-        paddingTop: 16,
+        paddingTop: 8,
         paddingBottom: 100,
     },
     header: {
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: 12,
     },
     icon: {
         fontSize: 48,
         marginBottom: 12,
     },
     title: {
-        fontSize: 28,
+        fontSize: 22,
         fontWeight: 'bold',
         color: '#212529',
         marginBottom: 8,

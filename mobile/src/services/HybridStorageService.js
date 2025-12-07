@@ -1,3 +1,20 @@
+/**
+ * HybridStorageService.js
+ * 
+ * Hybrid storage service that manages both local and cloud storage.
+ * This is the main data access layer - screens should use this service
+ * instead of directly accessing Database.js or FirestoreService.js.
+ * 
+ * Key features:
+ * - Automatic local-first storage with cloud sync
+ * - Bidirectional sync with Last-Write-Wins conflict resolution
+ * - Cloud storage limits and subscription tier support
+ * - Offline support with automatic sync when online
+ * - Tombstone-based deletion for proper sync
+ * 
+ * Flow: Screen → HybridStorageService → Database.js (local) + FirestoreService.js (cloud)
+ */
+
 import * as Database from './Database';
 import * as FirestoreService from './FirestoreService';
 import { getCurrentUser, signInAnonymouslyUser } from './FirebaseAuthService';
@@ -12,7 +29,8 @@ import {
     verifySaltIntegrity,
     isSaltMigrationRequired,
     getMigrationSalts,
-    clearSaltMigrationFlags
+    clearSaltMigrationFlags,
+    resetSaltVerification
 } from './UserSaltService';
 import { reEncryptAllPasswords } from './Encryption';
 

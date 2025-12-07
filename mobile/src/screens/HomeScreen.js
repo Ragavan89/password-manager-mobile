@@ -1,3 +1,19 @@
+/**
+ * HomeScreen.js
+ * 
+ * Main dashboard screen displaying all saved passwords.
+ * 
+ * Features:
+ * - Password list with expand/collapse cards
+ * - Search by site name, username, or comments
+ * - Copy username/password to clipboard
+ * - Edit and delete passwords
+ * - Cloud sync status indicators
+ * - Data loss warning banner (when cloud sync disabled)
+ * 
+ * Uses: HybridStorageService (data), Encryption (decrypt passwords)
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, TextInput, Animated, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -440,6 +456,7 @@ export default function HomeScreen({ navigation }) {
                     <TextInput
                         style={styles.searchInput}
                         placeholder="Search by site, username, or comments..."
+                        placeholderTextColor="#6c757d"
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                         autoCapitalize="none"
