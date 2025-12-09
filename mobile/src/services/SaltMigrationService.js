@@ -31,12 +31,12 @@ export const migrateLocalToCloudSalt = async () => {
         // This is stored when local salt is used (getUserSaltLocal stores it)
         const LOCAL_SALT_KEY = 'local_user_salt';
         const LOCAL_SALT_STORAGE_KEY = 'userSalt_local'; // The actual local salt storage
-        const localSalt = await SecureStore.getItemAsync(LOCAL_SALT_KEY) || 
-                         await SecureStore.getItemAsync(LOCAL_SALT_STORAGE_KEY);
-        
+        const localSalt = await SecureStore.getItemAsync(LOCAL_SALT_KEY) ||
+            await SecureStore.getItemAsync(LOCAL_SALT_STORAGE_KEY);
+
         // Check if we have local passwords that need migration
         const localPasswords = Database.getPasswords();
-        const localOnlyPasswords = localPasswords.filter(p => 
+        const localOnlyPasswords = localPasswords.filter(p =>
             p.cloudSynced === 0 || p.cloudSynced === null || p.cloudSynced === undefined
         );
 
@@ -53,9 +53,9 @@ export const migrateLocalToCloudSalt = async () => {
         // Get cloud salt
         const cloudSaltResult = await getUserSalt(false);
         if (!cloudSaltResult.success || !cloudSaltResult.salt) {
-            return { 
-                success: false, 
-                error: 'Failed to get cloud salt. Please ensure you are online and try again.' 
+            return {
+                success: false,
+                error: 'Failed to get cloud salt. Please ensure you are online and try again.'
             };
         }
 
@@ -79,41 +79,39 @@ export const migrateLocalToCloudSalt = async () => {
             await SecureStore.setItemAsync(`old_salt_${user.uid}`, localSalt);
             await SecureStore.setItemAsync(`new_salt_${user.uid}`, cloudSalt);
             await SecureStore.setItemAsync('SALT_MIGRATION_REQUIRED', 'true');
-            
+
             // Clean up local salt storage
             await SecureStore.deleteItemAsync(LOCAL_SALT_KEY);
             await SecureStore.deleteItemAsync(LOCAL_SALT_STORAGE_KEY);
-        } else {
-            // No local salt stored, but we have local passwords
-            // This means they were encrypted with a different salt
-            // We need to try to decrypt with legacy global salt and re-encrypt with cloud salt
-            const { ENCRYPTION_CONFIG } = await import('../config/EncryptionConfig');
-            await SecureStore.setItemAsync(`old_salt_${user.uid}`, ENCRYPTION_CONFIG.PBKDF2_SALT);
-            await SecureStore.setItemAsync(`new_salt_${user.uid}`, cloudSalt);
-            await SecureStore.setItemAsync('SALT_MIGRATION_REQUIRED', 'true');
-        }
 
-        // Perform re-encryption
-        const reEncryptResult = await reEncryptAllPasswords(user.uid);
-        
-        if (reEncryptResult.success) {
-            console.log(`✅ Migrated ${reEncryptResult.reEncryptedCount} passwords to cloud salt`);
-            return { 
-                success: true, 
-                migrated: true, 
-                reEncryptedCount: reEncryptResult.reEncryptedCount 
-            };
+            // Perform re-encryption
+            const reEncryptResult = await reEncryptAllPasswords(user.uid);
+
+            if (reEncryptResult.success) {
+                console.log(`✅ Migrated ${reEncryptResult.reEncryptedCount} passwords to cloud salt`);
+                return {
+                    success: true,
+                    migrated: true,
+                    reEncryptedCount: reEncryptResult.reEncryptedCount
+                };
+            } else {
+                return {
+                    success: false,
+                    error: reEncryptResult.error || 'Failed to migrate passwords'
+                };
+            }
         } else {
-            return { 
-                success: false, 
-                error: reEncryptResult.error || 'Failed to migrate passwords' 
-            };
+            // No local salt stored - this means we don't have a valid way to decrypt old data
+            // Since we removed legacy salt support, we treat this as a no-migratable state
+            // But we can just adopt the cloud salt for new entries
+            console.log('ℹ️ No local salt found, nothing to migrate');
+            return { success: true, migrated: false };
         }
     } catch (error) {
         console.error('Error in local-to-cloud salt migration:', error);
-        return { 
-            success: false, 
-            error: error.message || 'Failed to migrate passwords' 
+        return {
+            success: false,
+            error: error.message || 'Failed to migrate passwords'
         };
     }
 };

@@ -26,13 +26,11 @@ import { getCurrentUser } from './FirebaseAuthService';
 import * as Database from './Database';
 
 // Keys for SecureStore
+// Keys for SecureStore
 const MASTER_PASSWORD_KEY = 'keyvault_master_password_hash';
 const MASTER_PASSWORD_ENCRYPTED_KEY = 'keyvault_master_password_encrypted'; // For retrieval
 const ENCRYPTION_KEY_KEY = 'keyvault_encryption_key';
 const PIN_KEY = 'keyvault_user_pin_hash';
-
-// Fallback key for APP_SECRET_ONLY mode or legacy data
-const FALLBACK_SECRET = ENCRYPTION_CONFIG.APP_SECRET;
 
 /**
  * Checks if a PIN has been set
@@ -136,8 +134,9 @@ export const setupMasterPassword = async (password, requireOnline = false) => {
             iterations: ENCRYPTION_CONFIG.KEY_DERIVATION_ITERATIONS
         }).toString();
 
-        // 4. Encrypt the master password with APP_SECRET so it can be retrieved
-        const encryptedPassword = CryptoJS.AES.encrypt(password, FALLBACK_SECRET).toString();
+        // 4. Store the master password in SecureStore (It is encrypted by the OS automatically)
+        // We no longer double-encrypt with APP_SECRET
+        const encryptedPassword = password; // Stored directly in SecureStore
 
         // 5. Store the hash, derived key, and encrypted password securely
         await SecureStore.setItemAsync(MASTER_PASSWORD_KEY, hash);
@@ -203,9 +202,9 @@ export const getMasterPassword = async () => {
             return { success: false, error: 'Master password not found' };
         }
 
-        // Decrypt the master password using APP_SECRET
-        const bytes = CryptoJS.AES.decrypt(encryptedPassword, FALLBACK_SECRET);
-        const masterPassword = bytes.toString(CryptoJS.enc.Utf8);
+        // The password in SecureStore is already encrypted by the OS.
+        // We previously double-encrypted it with APP_SECRET, but now we just return it.
+        const masterPassword = encryptedPassword;
 
         if (!masterPassword) {
             return { success: false, error: 'Failed to decrypt master password' };
@@ -225,11 +224,6 @@ export const getMasterPassword = async () => {
  */
 const getEncryptionKey = async () => {
     try {
-        // If in APP_SECRET_ONLY mode, use the fallback
-        if (ENCRYPTION_CONFIG.MODE === ENCRYPTION_MODES.APP_SECRET_ONLY) {
-            return FALLBACK_SECRET;
-        }
-
         // Try to get the user's derived key (cached)
         const userKey = await SecureStore.getItemAsync(ENCRYPTION_KEY_KEY);
         if (userKey) {
@@ -264,25 +258,11 @@ const getEncryptionKey = async () => {
             }
         }
 
-        // Fallback to legacy global salt for backward compatibility
-        // This handles existing users who haven't migrated yet
-        if (masterPasswordResult.success && masterPasswordResult.masterPassword) {
-            const legacyKey = CryptoJS.PBKDF2(
-                masterPasswordResult.masterPassword,
-                ENCRYPTION_CONFIG.PBKDF2_SALT,
-                {
-                    keySize: 256 / 32,
-                    iterations: ENCRYPTION_CONFIG.KEY_DERIVATION_ITERATIONS
-                }
-            ).toString();
-            return legacyKey;
-        }
-
         // Final fallback
-        return FALLBACK_SECRET;
+        throw new Error('Could not derive encryption key');
     } catch (error) {
         console.error('Error getting encryption key:', error);
-        return FALLBACK_SECRET;
+        throw error;
     }
 };
 
@@ -321,32 +301,7 @@ export const decryptPassword = async (encryptedPassword) => {
             return originalText;
         }
 
-        // 2. Decryption failed - try legacy salt fallback
-        // This handles entries encrypted before per-user salt migration
-        console.log('⚠️ Primary decryption failed, trying legacy salt fallback...');
-
-        const masterPwResult = await getMasterPassword();
-        if (masterPwResult.success && masterPwResult.masterPassword) {
-            // Try legacy hardcoded salt
-            const legacyKey = CryptoJS.PBKDF2(
-                masterPwResult.masterPassword,
-                ENCRYPTION_CONFIG.PBKDF2_SALT,
-                {
-                    keySize: 256 / 32,
-                    iterations: ENCRYPTION_CONFIG.KEY_DERIVATION_ITERATIONS
-                }
-            ).toString();
-
-            const legacyBytes = CryptoJS.AES.decrypt(encryptedPassword, legacyKey);
-            const legacyText = legacyBytes.toString(CryptoJS.enc.Utf8);
-
-            if (legacyText && legacyText.length > 0) {
-                console.log('✅ Decrypted with legacy salt - consider re-encrypting this entry');
-                return legacyText;
-            }
-        }
-
-        // 3. All attempts failed - might be plain text (legacy support)
+        // All attempts failed - might be plain text (legacy support)
         console.log('⚠️ All decryption attempts failed, returning original text');
         return encryptedPassword;
     } catch (error) {

@@ -33,8 +33,11 @@ import { setupMasterPassword } from '../services/Encryption';
 import * as SecureStore from 'expo-secure-store';
 import { getCurrentUser } from '../services/FirebaseAuthService';
 import NetInfo from '@react-native-community/netinfo';
+import { useResponsiveDimensions } from '../utils/DimensionsHelper';
 
 export default function SetupMasterPasswordScreen({ navigation }) {
+    // Responsive dimensions hook
+    const { responsiveFontSize } = useResponsiveDimensions();
     const [masterPassword, setMasterPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -170,8 +173,8 @@ export default function SetupMasterPasswordScreen({ navigation }) {
             <View style={styles.container}>
                 <ScrollView contentContainerStyle={styles.scrollContent}>
                     <View style={styles.header}>
-                        <Text style={styles.title}>✅ Master Password Created!</Text>
-                        <Text style={styles.subtitle}>Save it now before continuing</Text>
+                        <Text style={[styles.title, { fontSize: responsiveFontSize(22) }]}>✅ Master Password Created!</Text>
+                        <Text style={[styles.subtitle, { fontSize: responsiveFontSize(16) }]}>Save it now before continuing</Text>
                     </View>
 
                     <View style={styles.backupSection}>
@@ -246,8 +249,8 @@ export default function SetupMasterPasswordScreen({ navigation }) {
                 >
                     <View style={styles.header}>
                         <Text style={styles.icon}>🔐</Text>
-                        <Text style={styles.title}>Secure Your Vault</Text>
-                        <Text style={styles.subtitle}>Create your Master Password</Text>
+                        <Text style={[styles.title, { fontSize: responsiveFontSize(22) }]}>Secure Your Vault</Text>
+                        <Text style={[styles.subtitle, { fontSize: responsiveFontSize(16) }]}>Create your Master Password</Text>
                     </View>
 
                     <View style={styles.explanationBox}>
@@ -279,7 +282,7 @@ export default function SetupMasterPasswordScreen({ navigation }) {
                     </View>
 
                     <View style={styles.form}>
-                        <Text style={styles.inputLabel}>Create Master Password</Text>
+                        <Text style={[styles.inputLabel, { fontSize: responsiveFontSize(14) }]}>Create Master Password</Text>
                         <View style={styles.inputContainer}>
                             <TextInput
                                 style={styles.input}
@@ -319,7 +322,7 @@ export default function SetupMasterPasswordScreen({ navigation }) {
                             </View>
                         )}
 
-                        <Text style={styles.inputLabel}>Confirm Master Password</Text>
+                        <Text style={[styles.inputLabel, { fontSize: responsiveFontSize(14) }]}>Confirm Master Password</Text>
                         <TextInput
                             style={styles.input}
                             placeholder="Re-enter your password"
@@ -353,7 +356,7 @@ export default function SetupMasterPasswordScreen({ navigation }) {
                         onPress={handleContinue}
                         disabled={!passwordStrength.valid || !confirmPassword || (isCloudSyncEnabled && !isOnline)}
                     >
-                        <Text style={styles.buttonText}>Continue</Text>
+                        <Text style={[styles.buttonText, { fontSize: responsiveFontSize(18) }]}>Continue</Text>
                     </TouchableOpacity>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -383,13 +386,13 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     title: {
-        fontSize: 22,
+        // Dynamic fontSize set inline in component
         fontWeight: 'bold',
         color: '#212529',
         marginBottom: 8,
     },
     subtitle: {
-        fontSize: 16,
+        // Dynamic fontSize set inline in component
         color: '#868e96',
         textAlign: 'center',
     },
@@ -416,7 +419,7 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     inputLabel: {
-        fontSize: 14,
+        // Dynamic fontSize set inline in component
         fontWeight: '600',
         color: '#495057',
         marginBottom: 8,
@@ -506,7 +509,7 @@ const styles = StyleSheet.create({
     },
     buttonText: {
         color: '#fff',
-        fontSize: 18,
+        // Dynamic fontSize set inline in component
         fontWeight: 'bold',
     },
     backupSection: {

@@ -26,8 +26,11 @@ import * as FirestoreService from '../services/FirestoreService';
 import { AppConfig } from '../config/AppConfig';
 import { firestore } from '../../firebase.config';
 import CustomAlert from '../components/CustomAlert';
+import { useResponsiveDimensions } from '../utils/DimensionsHelper';
 
 export default function SettingsScreen({ navigation }) {
+    // Responsive dimensions hook
+    const { isTablet } = useResponsiveDimensions();
     const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
     const [userEmail, setUserEmail] = useState('');
     const [lastSyncTime, setLastSyncTime] = useState(null);
@@ -516,7 +519,16 @@ export default function SettingsScreen({ navigation }) {
                     onRequestClose={handleCloseMasterPasswordModal}
                 >
                     <View style={styles.modalOverlay}>
-                        <View style={styles.modalContent}>
+                        <View 
+                            style={[
+                                styles.modalContent,
+                                {
+                                    width: isTablet ? '70%' : '85%',
+                                    maxWidth: isTablet ? 600 : 400,
+                                    minWidth: 300,
+                                }
+                            ]}
+                        >
                             <Text style={styles.modalTitle}>Your Master Password</Text>
                             <Text style={styles.modalWarning}>
                                 ⚠️ Keep this safe! You'll need it to set up the app on a new device.
@@ -705,8 +717,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderRadius: 16,
         padding: 24,
-        width: '85%',
-        maxWidth: 400,
+        // Dynamic width/maxWidth set inline in component
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,

@@ -17,8 +17,11 @@ import { View, TextInput, Text, TouchableOpacity, StyleSheet, Alert, KeyboardAvo
 import * as LocalAuthentication from 'expo-local-authentication';
 import CustomAlert from '../components/CustomAlert';
 import { isMasterPasswordSet, isPINSet, verifyPIN, setupPIN } from '../services/Encryption';
+import { useResponsiveDimensions } from '../utils/DimensionsHelper';
 
 export default function LoginScreen({ navigation }) {
+    // Responsive dimensions hook
+    const { scale, responsiveFontSize, isTablet } = useResponsiveDimensions();
     const [pin, setPin] = useState('');
     const [showResetModal, setShowResetModal] = useState(false);
     const [newPin, setNewPin] = useState('');
@@ -213,8 +216,17 @@ export default function LoginScreen({ navigation }) {
                         {/* PIN Digit Boxes */}
                         <View style={styles.pinContainer}>
                             {[0, 1, 2, 3].map((index) => (
-                                <View key={index} style={styles.pinBox}>
-                                    <Text style={styles.pinDot}>
+                                <View 
+                                    key={index} 
+                                    style={[
+                                        styles.pinBox,
+                                        {
+                                            width: isTablet ? scale(70) : scale(60),
+                                            height: isTablet ? scale(80) : scale(70),
+                                        }
+                                    ]}
+                                >
+                                    <Text style={[styles.pinDot, { fontSize: responsiveFontSize(40) }]}>
                                         {pin.length > index ? '●' : ''}
                                     </Text>
                                 </View>
@@ -415,8 +427,7 @@ const styles = StyleSheet.create({
         gap: 16,
     },
     pinBox: {
-        width: 60,
-        height: 70,
+        // Dynamic width/height set inline in component
         backgroundColor: '#f8f9fa',
         borderWidth: 2,
         borderColor: '#007AFF',
@@ -425,7 +436,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     pinDot: {
-        fontSize: 40,
+        // Dynamic fontSize set inline in component
         color: '#007AFF',
         fontWeight: 'bold',
     },

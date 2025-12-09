@@ -45,11 +45,7 @@ export const ENCRYPTION_CONFIG = {
      * Application secret used for encryption
      * - In MASTER_PASSWORD mode: Used to encrypt the user's master password
      * - In APP_SECRET_ONLY mode: Used directly to encrypt credentials
-     * 
-     * ⚠️ IMPORTANT: This is hardcoded in the app and can be extracted from the APK.
-     * For a local-first password manager, this is acceptable, but be aware of the limitation.
      */
-    APP_SECRET: 'keyvault-pro-encryption-secret-2025-v1',
 
     /**
      * PBKDF2 iterations for key derivation
@@ -57,12 +53,6 @@ export const ENCRYPTION_CONFIG = {
      * 10000 is a good balance for mobile devices
      */
     KEY_DERIVATION_ITERATIONS: 10000,
-
-    /**
-     * Salt for PBKDF2 key derivation
-     * This is used when deriving encryption keys from master password
-     */
-    PBKDF2_SALT: 'keyvault-pro-salt-2025',
 };
 
 /**

@@ -22,8 +22,11 @@ import { AppConfig } from '../config/AppConfig';
 import Database from '../services/Database';
 import * as SecureStore from 'expo-secure-store';
 import { getCurrentUser } from '../services/FirebaseAuthService';
+import { useResponsiveDimensions } from '../utils/DimensionsHelper';
 
 export default function AddPasswordScreen({ navigation, route }) {
+    // Responsive dimensions hook
+    const { responsiveFontSize } = useResponsiveDimensions();
     const itemToEdit = route.params?.item;
     const isEditMode = !!itemToEdit;
 
@@ -240,12 +243,12 @@ export default function AddPasswordScreen({ navigation, route }) {
                     contentContainerStyle={styles.content}
                     keyboardShouldPersistTaps="handled"
                 >
-                    <Text style={styles.headerTitle}>{isEditMode ? 'Edit Entry' : 'New Entry'}</Text>
-                    <Text style={styles.headerSubtitle}>Securely save your credentials</Text>
+                    <Text style={[styles.headerTitle, { fontSize: responsiveFontSize(28) }]}>{isEditMode ? 'Edit Entry' : 'New Entry'}</Text>
+                    <Text style={[styles.headerSubtitle, { fontSize: responsiveFontSize(14) }]}>Securely save your credentials</Text>
 
                     <View style={styles.form}>
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>WEBSITE / APP</Text>
+                            <Text style={[styles.label, { fontSize: responsiveFontSize(12) }]}>WEBSITE / APP</Text>
                             <TextInput
                                 style={styles.input}
                                 placeholder="e.g. Netflix"
@@ -277,7 +280,7 @@ export default function AddPasswordScreen({ navigation, route }) {
                         </View>
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>PASSWORD</Text>
+                            <Text style={[styles.label, { fontSize: responsiveFontSize(12) }]}>PASSWORD</Text>
                             <View style={styles.passwordContainer}>
                                 <TextInput
                                     ref={passwordRef}
@@ -314,7 +317,7 @@ export default function AddPasswordScreen({ navigation, route }) {
                                             ]}
                                         />
                                     </View>
-                                    <Text style={[styles.strengthText, { color: passwordStrength.color }]}>
+                                    <Text style={[styles.strengthText, { color: passwordStrength.color, fontSize: responsiveFontSize(12) }]}>
                                         {passwordStrength.strength}
                                     </Text>
                                 </View>
@@ -322,7 +325,7 @@ export default function AddPasswordScreen({ navigation, route }) {
                         </View>
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>COMMENTS (OPTIONAL)</Text>
+                            <Text style={[styles.label, { fontSize: responsiveFontSize(12) }]}>COMMENTS (OPTIONAL)</Text>
                             <TextInput
                                 ref={commentsRef}
                                 style={[styles.input, styles.commentsInput]}
@@ -347,7 +350,7 @@ export default function AddPasswordScreen({ navigation, route }) {
                         {loading ? (
                             <ActivityIndicator color="#fff" />
                         ) : (
-                            <Text style={styles.buttonText}>{isEditMode ? 'Update Password' : 'Save Password'}</Text>
+                            <Text style={[styles.buttonText, { fontSize: responsiveFontSize(18) }]}>{isEditMode ? 'Update Password' : 'Save Password'}</Text>
                         )}
                     </TouchableOpacity>
                 </ScrollView>
@@ -377,13 +380,13 @@ const styles = StyleSheet.create({
         paddingBottom: 100,
     },
     headerTitle: {
-        fontSize: 28,
+        // Dynamic fontSize set inline in component
         fontWeight: 'bold',
         color: '#212529',
         marginBottom: 6,
     },
     headerSubtitle: {
-        fontSize: 14,
+        // Dynamic fontSize set inline in component
         color: '#868e96',
         marginBottom: 30,
     },
@@ -394,7 +397,7 @@ const styles = StyleSheet.create({
         marginBottom: 18,
     },
     label: {
-        fontSize: 12,
+        // Dynamic fontSize set inline in component
         fontWeight: 'bold',
         color: '#868e96',
         marginBottom: 8,
@@ -448,7 +451,7 @@ const styles = StyleSheet.create({
         transition: 'width 0.3s ease',
     },
     strengthText: {
-        fontSize: 12,
+        // Dynamic fontSize set inline in component
         fontWeight: 'bold',
         minWidth: 80,
         textAlign: 'right',
@@ -473,7 +476,7 @@ const styles = StyleSheet.create({
     },
     buttonText: {
         color: '#fff',
-        fontSize: 18,
+        // Dynamic fontSize set inline in component
         fontWeight: 'bold',
     },
 });

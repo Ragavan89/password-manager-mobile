@@ -18,8 +18,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { signInWithEmail, signUpWithEmail, sendResetEmail } from '../services/FirebaseAuthService';
 import * as SecureStore from 'expo-secure-store';
 import CustomAlert from '../components/CustomAlert';
+import { useResponsiveDimensions } from '../utils/DimensionsHelper';
 
 export default function AuthScreen({ navigation }) {
+    // Responsive dimensions hook
+    const { responsiveFontSize } = useResponsiveDimensions();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -187,14 +190,14 @@ export default function AuthScreen({ navigation }) {
                 <ScrollView contentContainerStyle={styles.scrollContent}>
                     <View style={styles.header}>
                         <Text style={styles.icon}>☁️</Text>
-                        <Text style={styles.title}>Enable Cloud Sync</Text>
-                        <Text style={styles.subtitle}>
+                        <Text style={[styles.title, { fontSize: responsiveFontSize(28) }]}>Enable Cloud Sync</Text>
+                        <Text style={[styles.subtitle, { fontSize: responsiveFontSize(16) }]}>
                             Sign in to backup your passwords to the cloud and sync across devices
                         </Text>
                     </View>
 
                     <View style={styles.form}>
-                        <Text style={styles.formTitle}>
+                        <Text style={[styles.formTitle, { fontSize: responsiveFontSize(24) }]}>
                             {isSignUp ? 'Create Account' : 'Sign In'}
                         </Text>
 
@@ -261,7 +264,7 @@ export default function AuthScreen({ navigation }) {
                             onPress={handleAuth}
                             disabled={loading}
                         >
-                            <Text style={styles.buttonText}>
+                            <Text style={[styles.buttonText, { fontSize: responsiveFontSize(18) }]}>
                                 {loading ? 'Please wait...' : (isSignUp ? 'Create Account' : 'Sign In')}
                             </Text>
                         </TouchableOpacity>
@@ -338,13 +341,13 @@ const styles = StyleSheet.create({
         marginBottom: 10,
     },
     title: {
-        fontSize: 28,
+        // Dynamic fontSize set inline in component
         fontWeight: 'bold',
         color: '#007AFF',
         marginBottom: 10,
     },
     subtitle: {
-        fontSize: 16,
+        // Dynamic fontSize set inline in component
         color: '#666',
         textAlign: 'center',
         paddingHorizontal: 20,
@@ -407,7 +410,7 @@ const styles = StyleSheet.create({
     },
     buttonText: {
         color: 'white',
-        fontSize: 18,
+        // Dynamic fontSize set inline in component
         fontWeight: 'bold',
     },
     switchButton: {

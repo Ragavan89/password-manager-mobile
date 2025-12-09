@@ -23,9 +23,13 @@ import { decryptPassword } from '../services/Encryption';
 import * as Clipboard from 'expo-clipboard';
 import { getCurrentUser, onAuthChange } from '../services/FirebaseAuthService';
 import * as SecureStore from 'expo-secure-store';
+import { useResponsiveDimensions, useFontSizes } from '../utils/DimensionsHelper';
 
 export default function HomeScreen({ navigation }) {
     const insets = useSafeAreaInsets();
+    // Responsive dimensions hook
+    const { responsiveFontSize, isTablet } = useResponsiveDimensions();
+    const fontSizes = useFontSizes();
     const [passwords, setPasswords] = useState([]);
     const [filteredPasswords, setFilteredPasswords] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -313,19 +317,19 @@ export default function HomeScreen({ navigation }) {
         const isUnsynced = item.cloudSynced === 0;
 
         return (
-            <View style={[styles.card, isUnsynced && styles.unsyncedCard]}>
+            <View style={[styles.card, isUnsynced && styles.unsyncedCard, isTablet && styles.cardTablet]}>
                 <TouchableOpacity
                     style={styles.cardHeader}
                     onPress={() => toggleExpand(item.id)}
                     activeOpacity={0.7}
                 >
                     <View style={styles.iconContainer}>
-                        <Text style={styles.siteInitial}>{item.siteName.charAt(0).toUpperCase()}</Text>
+                        <Text style={[styles.siteInitial, { fontSize: responsiveFontSize(24) }]}>{item.siteName.charAt(0).toUpperCase()}</Text>
                     </View>
                     <View style={styles.headerText}>
-                        <Text style={styles.siteName}>{item.siteName}</Text>
+                        <Text style={[styles.siteName, { fontSize: responsiveFontSize(18) }]}>{item.siteName}</Text>
                         {!isExpanded && (
-                            <Text style={styles.username}>{item.username}</Text>
+                            <Text style={[styles.username, { fontSize: responsiveFontSize(14) }]}>{item.username}</Text>
                         )}
                     </View>
                     {isUnsynced && (
@@ -354,8 +358,8 @@ export default function HomeScreen({ navigation }) {
                         <View style={styles.cardBody}>
                             <View style={styles.fieldRow}>
                                 <View style={styles.fieldContainer}>
-                                    <Text style={styles.label}>USERNAME</Text>
-                                    <Text style={styles.value}>{item.username}</Text>
+                                    <Text style={[styles.label, { fontSize: responsiveFontSize(10) }]}>USERNAME</Text>
+                                    <Text style={[styles.value, { fontSize: responsiveFontSize(16) }]}>{item.username}</Text>
                                 </View>
                                 <TouchableOpacity onPress={() => copyToClipboard(item.username, 'Username')} style={styles.iconButton}>
                                     <Text style={styles.iconText}>📋</Text>
@@ -366,8 +370,8 @@ export default function HomeScreen({ navigation }) {
 
                             <View style={styles.fieldRow}>
                                 <View style={styles.fieldContainer}>
-                                    <Text style={styles.label}>PASSWORD</Text>
-                                    <Text style={styles.password}>
+                                    <Text style={[styles.label, { fontSize: responsiveFontSize(10) }]}>PASSWORD</Text>
+                                    <Text style={[styles.password, { fontSize: responsiveFontSize(16) }]}>
                                         {showPassword[item.id] ? (displayPassword || '••••••••••••') : '••••••••••••'}
                                     </Text>
                                 </View>
@@ -394,8 +398,8 @@ export default function HomeScreen({ navigation }) {
                                     <View style={styles.divider} />
                                     <View style={styles.fieldRow}>
                                         <View style={styles.fieldContainer}>
-                                            <Text style={styles.label}>COMMENTS</Text>
-                                            <Text style={styles.value}>{item.comments}</Text>
+                                            <Text style={[styles.label, { fontSize: responsiveFontSize(10) }]}>COMMENTS</Text>
+                                            <Text style={[styles.value, { fontSize: responsiveFontSize(16) }]}>{item.comments}</Text>
                                         </View>
                                     </View>
                                 </>
@@ -406,8 +410,8 @@ export default function HomeScreen({ navigation }) {
                                     <View style={styles.divider} />
                                     <View style={styles.fieldRow}>
                                         <View style={styles.fieldContainer}>
-                                            <Text style={styles.label}>LAST MODIFIED</Text>
-                                            <Text style={styles.timestamp}>
+                                            <Text style={[styles.label, { fontSize: responsiveFontSize(10) }]}>LAST MODIFIED</Text>
+                                            <Text style={[styles.timestamp, { fontSize: responsiveFontSize(13) }]}>
                                                 {formatDate(item.lastModified)}
                                             </Text>
                                         </View>
@@ -468,18 +472,24 @@ export default function HomeScreen({ navigation }) {
                         </TouchableOpacity>
                     )}
                 </View>
-                {searchQuery.length > 0 && (
-                    <Text style={styles.resultCount}>
-                        {filteredPasswords.length} result{filteredPasswords.length !== 1 ? 's' : ''} found
-                    </Text>
-                )}
+                    {searchQuery.length > 0 && (
+                        <Text style={[styles.resultCount, { fontSize: responsiveFontSize(12) }]}>
+                            {filteredPasswords.length} result{filteredPasswords.length !== 1 ? 's' : ''} found
+                        </Text>
+                    )}
             </View>
 
             <FlatList
                 data={filteredPasswords}
                 keyExtractor={(item) => item.id ? item.id.toString() : Math.random().toString()}
                 renderItem={renderItem}
-                contentContainerStyle={[styles.listContent, { paddingBottom: 120 + insets.bottom }]}
+                numColumns={isTablet ? 2 : 1}
+                columnWrapperStyle={isTablet ? styles.row : null}
+                contentContainerStyle={[
+                    styles.listContent,
+                    { paddingBottom: 120 + insets.bottom },
+                    isTablet && styles.listContentTablet
+                ]}
                 refreshControl={
                     <RefreshControl refreshing={false} onRefresh={handleRefresh} />
                 }
@@ -487,16 +497,16 @@ export default function HomeScreen({ navigation }) {
                     <View style={styles.emptyState}>
                         {searchQuery.length > 0 ? (
                             <>
-                                <Text style={styles.emptyText}>No passwords found</Text>
-                                <Text style={styles.emptySubText}>Try a different search term</Text>
+                                <Text style={[styles.emptyText, { fontSize: responsiveFontSize(18) }]}>No passwords found</Text>
+                                <Text style={[styles.emptySubText, { fontSize: responsiveFontSize(14) }]}>Try a different search term</Text>
                                 <TouchableOpacity onPress={clearSearch} style={styles.clearSearchButton}>
                                     <Text style={styles.clearSearchButtonText}>Clear Search</Text>
                                 </TouchableOpacity>
                             </>
                         ) : (
                             <>
-                                <Text style={styles.emptyText}>No passwords found.</Text>
-                                <Text style={styles.emptySubText}>Tap "Add New" in the header to add one.</Text>
+                                <Text style={[styles.emptyText, { fontSize: responsiveFontSize(18) }]}>No passwords found.</Text>
+                                <Text style={[styles.emptySubText, { fontSize: responsiveFontSize(14) }]}>Tap "Add New" in the header to add one.</Text>
                             </>
                         )}
                     </View>
@@ -543,6 +553,16 @@ const styles = StyleSheet.create({
         borderColor: '#ffd43b',
         borderWidth: 1.5,
     },
+    cardTablet: {
+        marginHorizontal: 10,
+        flex: 0.5,
+    },
+    row: {
+        justifyContent: 'space-between',
+    },
+    listContentTablet: {
+        paddingHorizontal: 20,
+    },
     unsyncedBadge: {
         backgroundColor: '#ffe066',
         paddingHorizontal: 8,
@@ -568,7 +588,7 @@ const styles = StyleSheet.create({
         marginRight: 15,
     },
     siteInitial: {
-        fontSize: 24,
+        // Dynamic fontSize set inline in component
         fontWeight: 'bold',
         color: '#007AFF',
     },
@@ -576,12 +596,12 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     siteName: {
-        fontSize: 18,
+        // Dynamic fontSize set inline in component
         fontWeight: 'bold',
         color: '#212529',
     },
     username: {
-        fontSize: 14,
+        // Dynamic fontSize set inline in component
         color: '#868e96',
         marginTop: 2,
     },
@@ -606,24 +626,24 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
     },
     label: {
-        fontSize: 10,
+        // Dynamic fontSize set inline in component
         fontWeight: 'bold',
         color: '#adb5bd',
         letterSpacing: 1,
         marginBottom: 4,
     },
     value: {
-        fontSize: 16,
+        // Dynamic fontSize set inline in component
         color: '#212529',
         fontWeight: '500',
     },
     password: {
-        fontSize: 16,
+        // Dynamic fontSize set inline in component
         color: '#495057',
         fontFamily: 'monospace',
     },
     timestamp: {
-        fontSize: 13,
+        // Dynamic fontSize set inline in component
         color: '#868e96',
         fontStyle: 'italic',
     },
@@ -671,16 +691,6 @@ const styles = StyleSheet.create({
     emptyState: {
         alignItems: 'center',
         marginTop: 100,
-    },
-    emptyText: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#343a40',
-    },
-    emptySubText: {
-        fontSize: 14,
-        color: '#868e96',
-        marginTop: 5,
     },
     editButton: {
         padding: 8,
@@ -825,7 +835,7 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
     resultCount: {
-        fontSize: 12,
+        // Dynamic fontSize set inline in component
         color: '#6c757d',
         marginTop: 8,
         fontStyle: 'italic',
@@ -841,6 +851,16 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 14,
         fontWeight: '600',
+    },
+    emptyText: {
+        // Dynamic fontSize set inline in component
+        fontWeight: 'bold',
+        color: '#343a40',
+    },
+    emptySubText: {
+        // Dynamic fontSize set inline in component
+        color: '#868e96',
+        marginTop: 5,
     },
     usageBanner: {
         backgroundColor: '#e7f5ff',

@@ -1,7 +1,10 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import { useResponsiveDimensions } from '../utils/DimensionsHelper';
 
 export default function CustomAlert({ visible, onClose, title, message, type = 'info', buttons = [], textAlign }) {
+    // Responsive dimensions hook
+    const { isTablet } = useResponsiveDimensions();
     // Determine icon and color based on type
     const getTypeConfig = () => {
         switch (type) {
@@ -27,7 +30,16 @@ export default function CustomAlert({ visible, onClose, title, message, type = '
             onRequestClose={onClose}
         >
             <View style={styles.overlay}>
-                <View style={styles.alertContainer}>
+                <View 
+                    style={[
+                        styles.alertContainer,
+                        {
+                            width: '90%',
+                            maxWidth: isTablet ? 500 : 340,
+                            minWidth: 280,
+                        }
+                    ]}
+                >
                     {/* Icon */}
                     <View style={[styles.iconContainer, { backgroundColor: config.bgColor }]}>
                         <Text style={styles.icon}>{config.icon}</Text>
@@ -96,8 +108,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderRadius: 20,
         padding: 24,
-        width: '100%',
-        maxWidth: 340,
+        // Dynamic width/maxWidth set inline in component
         alignItems: 'center',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
