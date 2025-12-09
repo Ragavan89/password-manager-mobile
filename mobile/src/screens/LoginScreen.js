@@ -14,6 +14,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { View, TextInput, Text, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, Modal, ScrollView, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as LocalAuthentication from 'expo-local-authentication';
 import CustomAlert from '../components/CustomAlert';
 import { isMasterPasswordSet, isPINSet, verifyPIN, setupPIN } from '../services/Encryption';
@@ -199,7 +200,7 @@ export default function LoginScreen({ navigation }) {
     };
 
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={styles.container}>
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.content}
@@ -216,8 +217,8 @@ export default function LoginScreen({ navigation }) {
                         {/* PIN Digit Boxes */}
                         <View style={styles.pinContainer}>
                             {[0, 1, 2, 3].map((index) => (
-                                <View 
-                                    key={index} 
+                                <View
+                                    key={index}
                                     style={[
                                         styles.pinBox,
                                         {
@@ -381,7 +382,7 @@ export default function LoginScreen({ navigation }) {
                 buttons={alertConfig.buttons}
                 onClose={() => setAlertConfig({ ...alertConfig, visible: false })}
             />
-        </View>
+        </SafeAreaView>
     );
 }
 

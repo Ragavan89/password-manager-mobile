@@ -14,6 +14,7 @@
 
 import React, { useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { setupPIN } from '../services/Encryption';
 import { useResponsiveDimensions } from '../utils/DimensionsHelper';
 
@@ -79,9 +80,10 @@ export default function SetupPINScreen({ navigation }) {
     const setCurrentPin = step === 1 ? setPin : setConfirmPin;
 
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={styles.container}>
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
                 style={styles.keyboardView}
             >
                 <ScrollView
@@ -121,8 +123,8 @@ export default function SetupPINScreen({ navigation }) {
                             {/* PIN Digit Boxes */}
                             <View style={styles.pinContainer}>
                                 {[0, 1, 2, 3].map((index) => (
-                                    <View 
-                                        key={index} 
+                                    <View
+                                        key={index}
                                         style={[
                                             styles.pinBox,
                                             {
@@ -152,29 +154,32 @@ export default function SetupPINScreen({ navigation }) {
                                 textContentType="oneTimeCode"
                             />
                         </View>
-
-                        <TouchableOpacity
-                            style={[styles.button, currentPin.length !== 4 && styles.buttonDisabled]}
-                            onPress={handleContinue}
-                            disabled={currentPin.length !== 4}
-                        >
-                            <Text style={styles.buttonText}>
-                                {step === 1 ? 'Continue' : 'Confirm & Save'}
-                            </Text>
-                        </TouchableOpacity>
-
-                        {step === 2 && (
-                            <TouchableOpacity
-                                style={styles.backButton}
-                                onPress={handleBack}
-                            >
-                                <Text style={styles.backButtonText}>← Back</Text>
-                            </TouchableOpacity>
-                        )}
                     </View>
                 </ScrollView>
+
+                {/* Footer Buttons - Outside ScrollView to stay visible above keyboard */}
+                <View style={styles.footer}>
+                    <TouchableOpacity
+                        style={[styles.button, currentPin.length !== 4 && styles.buttonDisabled]}
+                        onPress={handleContinue}
+                        disabled={currentPin.length !== 4}
+                    >
+                        <Text style={styles.buttonText}>
+                            {step === 1 ? 'Continue' : 'Confirm & Save'}
+                        </Text>
+                    </TouchableOpacity>
+
+                    {step === 2 && (
+                        <TouchableOpacity
+                            style={styles.backButton}
+                            onPress={handleBack}
+                        >
+                            <Text style={styles.backButtonText}>← Back</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
             </KeyboardAvoidingView>
-        </View>
+        </SafeAreaView>
     );
 }
 
@@ -305,5 +310,12 @@ const styles = StyleSheet.create({
         color: '#007AFF',
         fontSize: 16,
         fontWeight: '600',
+    },
+    footer: {
+        padding: 24,
+        paddingTop: 12,
+        backgroundColor: '#fff',
+        borderTopWidth: 1,
+        borderTopColor: '#f1f3f5',
     },
 });

@@ -26,6 +26,7 @@ import {
     Platform,
     ActivityIndicator
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import { isMasterPasswordRequired } from '../config/EncryptionConfig';
 import { validateMasterPasswordStrength } from '../services/AuthService';
@@ -170,7 +171,7 @@ export default function SetupMasterPasswordScreen({ navigation }) {
 
     if (showBackupScreen) {
         return (
-            <View style={styles.container}>
+            <SafeAreaView style={styles.container}>
                 <ScrollView contentContainerStyle={styles.scrollContent}>
                     <View style={styles.header}>
                         <Text style={[styles.title, { fontSize: responsiveFontSize(22) }]}>✅ Master Password Created!</Text>
@@ -233,12 +234,12 @@ export default function SetupMasterPasswordScreen({ navigation }) {
                         )}
                     </TouchableOpacity>
                 </ScrollView>
-            </View>
+            </SafeAreaView>
         );
     }
 
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={styles.container}>
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.keyboardView}
@@ -360,7 +361,7 @@ export default function SetupMasterPasswordScreen({ navigation }) {
                     </TouchableOpacity>
                 </ScrollView>
             </KeyboardAvoidingView>
-        </View>
+        </SafeAreaView>
     );
 }
 

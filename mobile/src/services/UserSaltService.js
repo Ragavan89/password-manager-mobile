@@ -21,7 +21,7 @@ import { app } from '../../firebase.config';
 import NetInfo from '@react-native-community/netinfo';
 import CryptoJS from 'crypto-js';
 import { ENCRYPTION_CONFIG } from '../config/EncryptionConfig';
-import { clearEncryptionKeyCache } from './Encryption';
+// import { clearEncryptionKeyCache } from './Encryption'; // REMOVED to break circular dependency
 
 // EXPLICITLY get the named database instance
 const firestore = getFirestore(app, 'keyvault-pro-india');
@@ -654,4 +654,17 @@ export const clearUserSaltCache = async (userId) => {
 export const resetSaltVerification = () => {
     lastSaltVerificationTime = 0;
     console.log('🔄 Salt verification reset - will re-verify on next sync');
+};
+
+/**
+ * Helper to clear encryption key cache without importing from Encryption.js
+ * (Breaks circular dependency: UserSaltService <-> Encryption)
+ */
+const clearEncryptionKeyCache = async () => {
+    try {
+        await SecureStore.deleteItemAsync('keyvault_encryption_key');
+        console.log('✅ Encryption key cache cleared (from UserSaltService)');
+    } catch (error) {
+        console.error('Error clearing encryption key cache:', error);
+    }
 };
