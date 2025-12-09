@@ -17,7 +17,8 @@ import {
     signOut as firebaseSignOut,
     onAuthStateChanged,
     sendPasswordResetEmail,
-    signInAnonymously
+    signInAnonymously,
+    deleteUser
 } from 'firebase/auth';
 import { auth } from '../../firebase.config';
 
@@ -85,6 +86,24 @@ export const signInWithEmail = async (email, password) => {
         }
 
         return { success: false, error: errorMessage };
+    }
+};
+
+/**
+ * Delete current user account
+ */
+export const deleteUserAccount = async () => {
+    try {
+        const user = auth.currentUser;
+        if (!user) {
+            return { success: false, error: 'No user logged in' };
+        }
+        await deleteUser(user);
+        return { success: true };
+    } catch (error) {
+        console.log('Delete account error:', error);
+        // "auth/requires-recent-login" is a common error here
+        return { success: false, error: error.code === 'auth/requires-recent-login' ? 'REQUIRES_RECENT_LOGIN' : error.message };
     }
 };
 

@@ -18,7 +18,7 @@ import { View, StyleSheet, Text, Alert, ScrollView, TouchableOpacity, Modal, Act
 import * as SecureStore from 'expo-secure-store';
 import * as Clipboard from 'expo-clipboard';
 import { verifyPIN, getMasterPassword, clearEncryptionKeyCache } from '../services/Encryption';
-import { clearUserSaltCache } from '../services/UserSaltService';
+import { clearUserSaltCache, preserveCurrentSaltForOffline } from '../services/UserSaltService';
 import { isMasterPasswordRequired } from '../config/EncryptionConfig';
 import { getCurrentUser, signOut } from '../services/FirebaseAuthService';
 import { syncToCloud, getLastSyncTime, getCloudPasswordLimit, getSubscriptionTierLimits } from '../services/HybridStorageService';
@@ -232,7 +232,7 @@ export default function SettingsScreen({ navigation }) {
                                 • Delete <Text style={{ fontWeight: 'bold' }}>{exceeded}</Text> password{exceeded > 1 ? 's' : ''} from local storage
                             </Text>
                             <Text style={{ fontSize: 15, color: '#495057' }}>
-                                • Or upgrade to a higher plan
+                                {/* • Or upgrade to a higher plan */}
                             </Text>
                         </View>
                     </View>
@@ -417,6 +417,77 @@ export default function SettingsScreen({ navigation }) {
                                 <Text style={styles.dangerButtonText}>Sign Out</Text>
                             </TouchableOpacity>
 
+                            {/* Delete Account Button */}
+                            <TouchableOpacity
+                                style={[styles.dangerButton, { marginTop: 10, borderColor: '#fa5252', backgroundColor: '#fff5f5' }]}
+                                onPress={() => {
+                                    Alert.alert(
+                                        'Delete Account',
+                                        'Unknown Warning: This will permanently delete your account and all data stored in the cloud. This action cannot be undone.\n\nYour local data on this device will generally be preserved, but cloud backups will be gone.',
+                                        [
+                                            { text: 'Cancel', style: 'cancel' },
+                                            {
+                                                text: 'Delete Permanently',
+                                                style: 'destructive',
+                                                onPress: async () => {
+                                                    try {
+                                                        const user = getCurrentUser();
+                                                        if (!user) {
+                                                            Alert.alert('Error', 'No user logged in');
+                                                            return;
+                                                        }
+
+                                                        setIsLoading(true);
+
+                                                        // 1. Preserve Salt for Local Data Access (IMPORTANT)
+                                                        // Ensures that after account deletion, the local app can still decrypt data
+                                                        // using the salt that was previously synced from cloud.
+                                                        await preserveCurrentSaltForOffline(user.uid);
+
+                                                        // 2. Delete Firestore Data
+                                                        await FirestoreService.deleteAllUserData(user.uid);
+
+                                                        // 3. Mark all local data as 'Unsynced' (Yellow Status)
+                                                        const Database = require('../services/Database');
+                                                        Database.markAllAsUnsynced();
+
+                                                        // 4. Clear Local Cloud Cache (But we just preserved the salt above!)
+                                                        await clearUserSaltCache(user.uid);
+                                                        await clearEncryptionKeyCache();
+                                                        await SecureStore.deleteItemAsync('CLOUD_SYNC_ENABLED');
+                                                        await SecureStore.deleteItemAsync('FIREBASE_USER_EMAIL');
+                                                        await SecureStore.deleteItemAsync('LAST_SYNC_TIME');
+
+                                                        // 5. Delete Auth Account
+                                                        const { deleteUserAccount } = require('../services/FirebaseAuthService');
+                                                        const result = await deleteUserAccount();
+
+                                                        if (result.success) {
+                                                            // Reset State
+                                                            setCloudSyncEnabled(false);
+                                                            setUserEmail('');
+                                                            setLastSyncTime(null);
+                                                            Alert.alert('Account Deleted', 'Your account has been successfully deleted.');
+                                                        } else if (result.error === 'REQUIRES_RECENT_LOGIN') {
+                                                            Alert.alert('Security Check', 'For security, please sign out and sign in again before deleting your account.');
+                                                        } else {
+                                                            Alert.alert('Error', 'Failed to delete account: ' + result.error);
+                                                        }
+                                                    } catch (error) {
+                                                        console.error('Delete account error:', error);
+                                                        Alert.alert('Error', 'An unexpected error occurred.');
+                                                    } finally {
+                                                        setIsLoading(false);
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    );
+                                }}
+                            >
+                                <Text style={[styles.dangerButtonText, { color: '#c92a2a' }]}>Delete Account</Text>
+                            </TouchableOpacity>
+
                             <View style={styles.limitInfoContainer}>
                                 <Text style={styles.limitInfoIcon}>ℹ️</Text>
                                 <Text style={styles.limitInfoText}>
@@ -519,7 +590,7 @@ export default function SettingsScreen({ navigation }) {
                     onRequestClose={handleCloseMasterPasswordModal}
                 >
                     <View style={styles.modalOverlay}>
-                        <View 
+                        <View
                             style={[
                                 styles.modalContent,
                                 {

@@ -163,6 +163,40 @@ export const deletePassword = async (userId, passwordId) => {
 };
 
 /**
+ * Delete ALL user data (passwords and user document)
+ * Used when deleting account
+ */
+export const deleteAllUserData = async (userId) => {
+    try {
+        if (!userId) {
+            return { success: false, error: 'User ID required' };
+        }
+
+        console.log(`⚠️ Starting deletion of all data for user ${userId}`);
+
+        // 1. Delete all passwords
+        const passwordsRef = collection(firestore, 'users', userId, 'passwords');
+        const snapshot = await getDocs(passwordsRef);
+
+        const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(deletePromises);
+
+        console.log(`✅ Deleted ${snapshot.size} password documents`);
+
+        // 2. Delete user document
+        const userRef = doc(firestore, 'users', userId);
+        await deleteDoc(userRef);
+
+        console.log('✅ Deleted user profile document');
+
+        return { success: true };
+    } catch (error) {
+        console.error('Error deleting user data:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+/**
  * Save encrypted master password hash
  */
 export const saveMasterPasswordHash = async (userId, encryptedHash) => {

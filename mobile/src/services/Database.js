@@ -257,3 +257,15 @@ export const deleteOldTombstones = (beforeDate) => {
     beforeDate
   );
 };
+// Update ALL passwords to be marked as "not synced"
+// Used when user disconnects/deletes cloud account to show yellow status locally
+export const markAllAsUnsynced = () => {
+  if (Platform.OS === 'web') {
+    const existing = JSON.parse(localStorage.getItem('passwords') || '[]');
+    const updated = existing.map(p => ({ ...p, cloudSynced: 0 }));
+    localStorage.setItem('passwords', JSON.stringify(updated));
+    return;
+  }
+  // Reset all active passwords to pending sync
+  db.runSync('UPDATE passwords SET cloudSynced = 0 WHERE isDeleted = 0 OR isDeleted IS NULL');
+};

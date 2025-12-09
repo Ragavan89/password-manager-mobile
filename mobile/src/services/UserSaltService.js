@@ -613,6 +613,32 @@ export const verifySaltIntegrity = async (userId, forceCheck = false) => {
 };
 
 /**
+ * Preserve the current user salt as the local device salt.
+ * Call this BEFORE deleting an account to ensure local data remains readable
+ * after the user is converted to an "offline" user.
+ * 
+ * @param {string} userId - Firebase user ID
+ */
+export const preserveCurrentSaltForOffline = async (userId) => {
+    try {
+        if (!userId) return;
+
+        const currentSalt = await SecureStore.getItemAsync(`userSalt_${userId}`);
+        if (currentSalt) {
+            console.log('💾 Preserving cloud salt for offline use...');
+            // Overwrite local salt with the cloud salt we are used to
+            await SecureStore.setItemAsync('userSalt_local', currentSalt);
+            await SecureStore.setItemAsync('local_user_salt', currentSalt); // Legacy backup
+            console.log('✅ Salt preserved. Local data will remain decryptable.');
+        } else {
+            console.warn('⚠️ No current salt found to preserve.');
+        }
+    } catch (error) {
+        console.error('Error preserving salt:', error);
+    }
+};
+
+/**
  * Clear salt cache for a specific user (call on logout)
  * This ensures fresh salt fetch from Firestore on next login.
  * 
