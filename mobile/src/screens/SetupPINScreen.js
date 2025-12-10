@@ -15,8 +15,10 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { setupPIN } from '../services/Encryption';
 import { useResponsiveDimensions } from '../utils/DimensionsHelper';
+import { theme } from '../theme';
 
 export default function SetupPINScreen({ navigation }) {
     // Responsive dimensions hook
@@ -92,7 +94,9 @@ export default function SetupPINScreen({ navigation }) {
                     showsVerticalScrollIndicator={false}
                 >
                     <View style={styles.header}>
-                        <Text style={styles.icon}>🔐</Text>
+                        <View style={styles.iconCircle}>
+                            <Ionicons name="lock-closed" size={40} color={theme.colors.primary} />
+                        </View>
                         <Text style={styles.title}>
                             {step === 1 ? 'Create Your PIN' : 'Confirm Your PIN'}
                         </Text>
@@ -105,7 +109,7 @@ export default function SetupPINScreen({ navigation }) {
 
                     {step === 1 && (
                         <View style={styles.infoBox}>
-                            <Text style={styles.infoIcon}>💡</Text>
+                            <Ionicons name="information-circle" size={20} color={theme.colors.info} style={{ marginRight: 12 }} />
                             <View style={styles.infoContent}>
                                 <Text style={styles.infoTitle}>PIN Tips:</Text>
                                 <Text style={styles.infoText}>
@@ -186,7 +190,7 @@ export default function SetupPINScreen({ navigation }) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
+        backgroundColor: theme.colors.surface,
     },
     keyboardView: {
         flex: 1,
@@ -201,48 +205,52 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 24,
     },
-    icon: {
-        fontSize: 48,
-        marginBottom: 12,
+    iconCircle: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: theme.colors.surfaceLight,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
+        borderWidth: 2,
+        borderColor: theme.colors.border,
     },
     title: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#212529',
+        fontSize: theme.fonts.sizes.h2,
+        fontWeight: theme.fonts.weights.bold,
+        color: theme.colors.text,
         marginBottom: 10,
         textAlign: 'center',
     },
     subtitle: {
-        fontSize: 16,
-        color: '#868e96',
+        fontSize: theme.fonts.sizes.medium,
+        color: theme.colors.textSecondary,
         textAlign: 'center',
         paddingHorizontal: 20,
     },
     infoBox: {
         flexDirection: 'row',
-        backgroundColor: '#e7f5ff',
+        backgroundColor: theme.colors.infoLight,
         padding: 16,
         borderRadius: 12,
         marginBottom: 20,
-        borderLeftWidth: 4,
-        borderLeftColor: '#1971c2',
-    },
-    infoIcon: {
-        fontSize: 20,
-        marginRight: 12,
+        borderLeftWidth: 3,
+        borderLeftColor: theme.colors.info,
+        alignItems: 'flex-start',
     },
     infoContent: {
         flex: 1,
     },
     infoTitle: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: '#1971c2',
+        fontSize: theme.fonts.sizes.small,
+        fontWeight: theme.fonts.weights.bold,
+        color: theme.colors.info,
         marginBottom: 6,
     },
     infoText: {
-        fontSize: 13,
-        color: '#495057',
+        fontSize: theme.fonts.sizes.tiny,
+        color: theme.colors.textSecondary,
         lineHeight: 20,
     },
     form: {
@@ -258,18 +266,17 @@ const styles = StyleSheet.create({
         gap: 16,
     },
     pinBox: {
-        // Dynamic width/height set inline in component
-        backgroundColor: '#f8f9fa',
+        backgroundColor: theme.colors.surface,
         borderWidth: 2,
-        borderColor: '#007AFF',
-        borderRadius: 16,
+        borderColor: theme.colors.border,
+        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
+        ...theme.shadows.small,
     },
     pinDot: {
-        // Dynamic fontSize set inline in component
-        color: '#007AFF',
-        fontWeight: 'bold',
+        color: theme.colors.primary,
+        fontWeight: theme.fonts.weights.bold,
     },
     overlayInput: {
         position: 'absolute',
@@ -281,25 +288,19 @@ const styles = StyleSheet.create({
         fontSize: 1,
     },
     button: {
-        backgroundColor: '#007AFF',
+        backgroundColor: theme.colors.primary,
         paddingVertical: 18,
         borderRadius: 12,
         alignItems: 'center',
-        shadowColor: '#007AFF',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
+        ...theme.shadows.small,
     },
     buttonDisabled: {
-        backgroundColor: '#adb5bd',
-        shadowOpacity: 0,
-        elevation: 0,
+        opacity: 0.5,
     },
     buttonText: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: 'bold',
+        color: theme.colors.textInverse,
+        fontSize: theme.fonts.sizes.large,
+        fontWeight: theme.fonts.weights.bold,
     },
     backButton: {
         marginTop: 20,
@@ -307,15 +308,15 @@ const styles = StyleSheet.create({
         padding: 12,
     },
     backButtonText: {
-        color: '#007AFF',
-        fontSize: 16,
-        fontWeight: '600',
+        color: theme.colors.primary,
+        fontSize: theme.fonts.sizes.medium,
+        fontWeight: theme.fonts.weights.semibold,
     },
     footer: {
         padding: 24,
         paddingTop: 12,
-        backgroundColor: '#fff',
+        backgroundColor: theme.colors.surface,
         borderTopWidth: 1,
-        borderTopColor: '#f1f3f5',
+        borderTopColor: theme.colors.border,
     },
 });

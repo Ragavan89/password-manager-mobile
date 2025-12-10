@@ -15,10 +15,12 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { signInWithEmail, signUpWithEmail, sendResetEmail } from '../services/FirebaseAuthService';
 import * as SecureStore from 'expo-secure-store';
 import CustomAlert from '../components/CustomAlert';
 import { useResponsiveDimensions } from '../utils/DimensionsHelper';
+import { theme } from '../theme';
 
 export default function AuthScreen({ navigation }) {
     // Responsive dimensions hook
@@ -189,9 +191,11 @@ export default function AuthScreen({ navigation }) {
             >
                 <ScrollView contentContainerStyle={styles.scrollContent}>
                     <View style={styles.header}>
-                        <Text style={styles.icon}>☁️</Text>
-                        <Text style={[styles.title, { fontSize: responsiveFontSize(28) }]}>Enable Cloud Sync</Text>
-                        <Text style={[styles.subtitle, { fontSize: responsiveFontSize(16) }]}>
+                        <View style={styles.iconCircle}>
+                            <Ionicons name="cloud" size={48} color={theme.colors.primary} />
+                        </View>
+                        <Text style={styles.title}>Enable Cloud Sync</Text>
+                        <Text style={styles.subtitle}>
                             Sign in to backup your passwords to the cloud and sync across devices
                         </Text>
                     </View>
@@ -226,7 +230,7 @@ export default function AuthScreen({ navigation }) {
                                 style={styles.eyeIcon}
                                 onPress={() => setShowPassword(!showPassword)}
                             >
-                                <Text style={{ fontSize: 20 }}>{showPassword ? '👁️' : '🙈'}</Text>
+                                <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={22} color={theme.colors.textSecondary} />
                             </TouchableOpacity>
                         </View>
 
@@ -254,7 +258,7 @@ export default function AuthScreen({ navigation }) {
                                     style={styles.eyeIcon}
                                     onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                                 >
-                                    <Text style={{ fontSize: 20 }}>{showConfirmPassword ? '👁️' : '🙈'}</Text>
+                                    <Ionicons name={showConfirmPassword ? 'eye-off' : 'eye'} size={22} color={theme.colors.textSecondary} />
                                 </TouchableOpacity>
                             </View>
                         )}
@@ -292,15 +296,18 @@ export default function AuthScreen({ navigation }) {
                     </View>
 
                     <View style={styles.footer}>
-                        <Text style={styles.footerText}>
-                            🔒 Your passwords are encrypted end-to-end
-                        </Text>
-                        <Text style={styles.footerText}>
-                            📱 Works offline - syncs when online
-                        </Text>
-                        <Text style={styles.footerText}>
-                            ⚡ Optional - app works without cloud sync
-                        </Text>
+                        <View style={styles.footerItem}>
+                            <Ionicons name="lock-closed" size={16} color={theme.colors.success} />
+                            <Text style={styles.footerText}>Your passwords are encrypted end-to-end</Text>
+                        </View>
+                        <View style={styles.footerItem}>
+                            <Ionicons name="phone-portrait" size={16} color={theme.colors.info} />
+                            <Text style={styles.footerText}>Works offline - syncs when online</Text>
+                        </View>
+                        <View style={styles.footerItem}>
+                            <Ionicons name="flash" size={16} color={theme.colors.warning} />
+                            <Text style={styles.footerText}>Optional - app works without cloud sync</Text>
+                        </View>
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -322,7 +329,7 @@ export default function AuthScreen({ navigation }) {
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: theme.colors.background,
     },
     container: {
         flex: 1,
@@ -336,55 +343,60 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 40,
     },
-    icon: {
-        fontSize: 60,
-        marginBottom: 10,
+    iconCircle: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: theme.colors.surfaceLight,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
+        borderWidth: 2,
+        borderColor: theme.colors.border,
     },
     title: {
-        // Dynamic fontSize set inline in component
-        fontWeight: 'bold',
-        color: '#007AFF',
+        fontSize: theme.fonts.sizes.h2,
+        fontWeight: theme.fonts.weights.bold,
+        color: theme.colors.text,
         marginBottom: 10,
     },
     subtitle: {
-        // Dynamic fontSize set inline in component
-        color: '#666',
+        fontSize: theme.fonts.sizes.medium,
+        color: theme.colors.textSecondary,
         textAlign: 'center',
         paddingHorizontal: 20,
     },
     form: {
-        backgroundColor: 'white',
+        backgroundColor: theme.colors.surface,
         borderRadius: 15,
         padding: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 3,
+        ...theme.shadows.medium,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
     },
     formTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#333',
+        fontSize: theme.fonts.sizes.h3,
+        fontWeight: theme.fonts.weights.bold,
+        color: theme.colors.text,
         marginBottom: 20,
         textAlign: 'center',
     },
     input: {
-        backgroundColor: '#f9f9f9',
+        backgroundColor: theme.colors.surfaceLight,
         borderWidth: 1,
-        borderColor: '#ddd',
+        borderColor: theme.colors.border,
         borderRadius: 10,
         padding: 15,
-        fontSize: 16,
+        fontSize: theme.fonts.sizes.medium,
         marginBottom: 15,
-        color: '#212529',
+        color: theme.colors.text,
     },
     passwordContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#f9f9f9',
+        backgroundColor: theme.colors.surfaceLight,
         borderWidth: 1,
-        borderColor: '#ddd',
+        borderColor: theme.colors.border,
         borderRadius: 10,
         marginBottom: 15,
         paddingHorizontal: 15,
@@ -392,51 +404,56 @@ const styles = StyleSheet.create({
     passwordInput: {
         flex: 1,
         paddingVertical: 15,
-        fontSize: 16,
-        color: '#212529',
+        fontSize: theme.fonts.sizes.medium,
+        color: theme.colors.text,
     },
     eyeIcon: {
         padding: 5,
     },
     button: {
-        backgroundColor: '#007AFF',
+        backgroundColor: theme.colors.primary,
         borderRadius: 10,
         padding: 15,
         alignItems: 'center',
         marginTop: 10,
     },
     buttonDisabled: {
-        backgroundColor: '#ccc',
+        opacity: 0.5,
     },
     buttonText: {
-        color: 'white',
-        // Dynamic fontSize set inline in component
-        fontWeight: 'bold',
+        color: theme.colors.textInverse,
+        fontSize: theme.fonts.sizes.large,
+        fontWeight: theme.fonts.weights.bold,
     },
     switchButton: {
         marginTop: 20,
         alignItems: 'center',
     },
     switchText: {
-        color: '#007AFF',
-        fontSize: 16,
+        color: theme.colors.primary,
+        fontSize: theme.fonts.sizes.medium,
     },
     cancelButton: {
         marginTop: 15,
         alignItems: 'center',
     },
     cancelText: {
-        color: '#666',
-        fontSize: 16,
+        color: theme.colors.textSecondary,
+        fontSize: theme.fonts.sizes.medium,
     },
     footer: {
         marginTop: 40,
         alignItems: 'center',
     },
-    footerText: {
-        fontSize: 14,
-        color: '#666',
+    footerItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
         marginBottom: 8,
+        gap: 8,
+    },
+    footerText: {
+        fontSize: theme.fonts.sizes.small,
+        color: theme.colors.textSecondary,
         textAlign: 'center',
     },
     forgotPasswordButton: {
@@ -444,8 +461,8 @@ const styles = StyleSheet.create({
         marginBottom: 15,
     },
     forgotPasswordText: {
-        color: '#007AFF',
-        fontSize: 14,
-        fontWeight: '600',
+        color: theme.colors.primary,
+        fontSize: theme.fonts.sizes.small,
+        fontWeight: theme.fonts.weights.semibold,
     },
 });

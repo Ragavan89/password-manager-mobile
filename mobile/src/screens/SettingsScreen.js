@@ -15,6 +15,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, Alert, ScrollView, TouchableOpacity, Modal, ActivityIndicator, TextInput, Platform, KeyboardAvoidingView, Linking } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import * as Clipboard from 'expo-clipboard';
 import { verifyPIN, getMasterPassword, clearEncryptionKeyCache } from '../services/Encryption';
@@ -27,6 +28,8 @@ import { AppConfig } from '../config/AppConfig';
 import { firestore } from '../../firebase.config';
 import CustomAlert from '../components/CustomAlert';
 import { useResponsiveDimensions } from '../utils/DimensionsHelper';
+import { Colors, Shadows } from '../theme/colors';
+import { FontSizes, FontWeights } from '../theme/typography';
 
 export default function SettingsScreen({ navigation }) {
     // Responsive dimensions hook
@@ -557,6 +560,9 @@ export default function SettingsScreen({ navigation }) {
                         style={styles.modalOverlay}
                     >
                         <View style={styles.modalContent}>
+                            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                                <Ionicons name="lock-closed" size={48} color={Colors.primary.solid} />
+                            </View>
                             <Text style={styles.modalTitle}>Enter Your PIN</Text>
                             <Text style={styles.modalDescription}>
                                 Verify your identity to view the master password
@@ -658,11 +664,11 @@ export default function SettingsScreen({ navigation }) {
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: '#f8f9fa',
+        backgroundColor: Colors.background.light,
     },
     container: {
         flex: 1,
-        backgroundColor: '#f8f9fa',
+        backgroundColor: Colors.background.light,
     },
     scrollContent: {
         paddingBottom: Platform.OS === 'android' ? 24 : 16,
@@ -671,30 +677,32 @@ const styles = StyleSheet.create({
         margin: 16,
     },
     sectionTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#212529',
+        fontSize: FontSizes.h3,
+        fontWeight: FontWeights.bold,
+        color: Colors.text.primary,
         marginBottom: 12,
     },
     card: {
-        backgroundColor: '#fff',
+        backgroundColor: Colors.neutral.white,
         padding: 20,
         borderRadius: 12,
-        shadowColor: '#000',
+        shadowColor: Colors.shadow.card,
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
+        shadowOpacity: 0.08,
         shadowRadius: 4,
-        elevation: 3,
+        elevation: 2,
+        borderWidth: 1,
+        borderColor: Colors.border.light,
     },
     cardTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#212529',
+        fontSize: FontSizes.large,
+        fontWeight: FontWeights.bold,
+        color: Colors.text.primary,
         marginBottom: 8,
     },
     cardDescription: {
-        fontSize: 14,
-        color: '#6c757d',
+        fontSize: FontSizes.small,
+        color: Colors.text.secondary,
         lineHeight: 20,
         marginBottom: 16,
     },
@@ -708,49 +716,52 @@ const styles = StyleSheet.create({
         color: '#6c757d',
     },
     syncStatusValue: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#212529',
+        fontSize: FontSizes.small,
+        fontWeight: FontWeights.semibold,
+        color: Colors.text.primary,
     },
     primaryButton: {
-        backgroundColor: '#007AFF',
+        backgroundColor: Colors.primary.solid,
         padding: 14,
         borderRadius: 10,
         alignItems: 'center',
         marginBottom: 8,
+        ...Shadows.small,
     },
     primaryButtonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: 'bold',
+        color: Colors.neutral.white,
+        fontSize: FontSizes.medium,
+        fontWeight: FontWeights.bold,
     },
     secondaryButton: {
-        backgroundColor: '#fff',
+        backgroundColor: '#f0f8ff',  // Very light sky blue (Alice Blue)
         padding: 14,
         borderRadius: 10,
         alignItems: 'center',
         borderWidth: 2,
-        borderColor: '#007AFF',
+        borderColor: Colors.primary.solid,
         marginBottom: 8,
+        ...Shadows.small,
     },
     secondaryButtonText: {
-        color: '#007AFF',
-        fontSize: 16,
-        fontWeight: '600',
+        color: Colors.primary.solid,
+        fontSize: FontSizes.medium,
+        fontWeight: FontWeights.semibold,
     },
     dangerButton: {
-        backgroundColor: '#fff',
+        backgroundColor: Colors.danger.light,
         padding: 14,
         borderRadius: 10,
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#dc3545',
+        borderWidth: 2,
+        borderColor: Colors.danger.solid,
         marginBottom: 8,
+        ...Shadows.small,
     },
     dangerButtonText: {
-        color: '#dc3545',
-        fontSize: 16,
-        fontWeight: '600',
+        color: Colors.danger.solid,
+        fontSize: FontSizes.medium,
+        fontWeight: FontWeights.bold,
     },
     testButton: {
         backgroundColor: '#fff',
@@ -799,26 +810,23 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     modalContent: {
-        backgroundColor: '#fff',
+        backgroundColor: Colors.neutral.white,
         borderRadius: 16,
         padding: 24,
-        // Dynamic width/maxWidth set inline in component
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8,
+        ...Shadows.large,
+        borderWidth: 1,
+        borderColor: Colors.border.light,
     },
     modalTitle: {
-        fontSize: 22,
-        fontWeight: 'bold',
-        color: '#212529',
+        fontSize: FontSizes.h3,
+        fontWeight: FontWeights.bold,
+        color: Colors.text.primary,
         marginBottom: 8,
         textAlign: 'center',
     },
     modalDescription: {
-        fontSize: 14,
-        color: '#6c757d',
+        fontSize: FontSizes.small,
+        color: Colors.text.secondary,
         textAlign: 'center',
         marginBottom: 20,
         lineHeight: 20,
@@ -835,15 +843,15 @@ const styles = StyleSheet.create({
     },
     pinInput: {
         borderWidth: 2,
-        borderColor: '#007AFF',
+        borderColor: Colors.primary.solid,
         padding: 14,
-        fontSize: 18,
+        fontSize: FontSizes.large,
         borderRadius: 10,
-        backgroundColor: '#f8f9fa',
+        backgroundColor: Colors.neutral.gray50,
         textAlign: 'center',
         marginBottom: 20,
         letterSpacing: 8,
-        color: '#212529',
+        color: Colors.text.primary,
     },
     modalButtons: {
         flexDirection: 'row',
@@ -857,22 +865,23 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     cancelButton: {
-        backgroundColor: '#f8f9fa',
+        backgroundColor: Colors.neutral.gray100,
         borderWidth: 1,
-        borderColor: '#dee2e6',
+        borderColor: Colors.border.medium,
     },
     cancelButtonText: {
-        color: '#495057',
-        fontSize: 16,
-        fontWeight: '600',
+        color: Colors.text.secondary,
+        fontSize: FontSizes.medium,
+        fontWeight: FontWeights.semibold,
     },
     verifyButton: {
-        backgroundColor: '#007AFF',
+        backgroundColor: Colors.primary.solid,
+        ...Shadows.small,
     },
     verifyButtonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: 'bold',
+        color: Colors.neutral.white,
+        fontSize: FontSizes.medium,
+        fontWeight: FontWeights.bold,
     },
     passwordDisplay: {
         backgroundColor: '#f8f9fa',

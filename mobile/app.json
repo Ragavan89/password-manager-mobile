@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "CredVault",
-    "slug": "credvault",
+    "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -36,12 +36,14 @@
       "expo-sqlite",
       "expo-secure-store",
       "./plugins/with-agp-fix.js",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-font"
     ],
     "extra": {
       "eas": {
         "projectId": "e9a1da51-f4d8-4391-bfb3-e7b9dcf5eccb"
       }
-    }
+    },
+    "owner": "ragavan89"
   }
 }

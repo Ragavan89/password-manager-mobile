@@ -15,14 +15,21 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { View, TextInput, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import * as HybridStorageService from '../services/HybridStorageService';
 import { encryptPassword, decryptPassword } from '../services/Encryption';
 import CustomAlert from '../components/CustomAlert';
+import GradientButton from '../components/GradientButton';
+import PasswordStrengthMeter from '../components/PasswordStrengthMeter';
+import SuccessAnimation from '../components/SuccessAnimation';
 import { AppConfig } from '../config/AppConfig';
 import Database from '../services/Database';
 import * as SecureStore from 'expo-secure-store';
 import { getCurrentUser } from '../services/FirebaseAuthService';
 import { useResponsiveDimensions } from '../utils/DimensionsHelper';
+import { Colors } from '../theme/colors';
+import { FontSizes, FontWeights } from '../theme/typography';
 
 export default function AddPasswordScreen({ navigation, route }) {
     // Responsive dimensions hook
@@ -36,6 +43,7 @@ export default function AddPasswordScreen({ navigation, route }) {
     const [comments, setComments] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
     const [alertConfig, setAlertConfig] = useState({
         visible: false,
         title: '',
@@ -296,32 +304,21 @@ export default function AddPasswordScreen({ navigation, route }) {
                                     maxLength={256}
                                 />
                                 <TouchableOpacity
-                                    onPress={() => setShowPassword(!showPassword)}
+                                    onPress={() => {
+                                        setShowPassword(!showPassword);
+                                    }}
                                     style={styles.eyeButton}
                                 >
-                                    <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
+                                    <Ionicons
+                                        name={showPassword ? 'eye-off' : 'eye'}
+                                        size={22}
+                                        color={Colors.text.secondary}
+                                    />
                                 </TouchableOpacity>
                             </View>
 
-                            {/* Password Strength Indicator */}
-                            {password.length > 0 && (
-                                <View style={styles.strengthContainer}>
-                                    <View style={styles.strengthBar}>
-                                        <View
-                                            style={[
-                                                styles.strengthFill,
-                                                {
-                                                    width: `${passwordStrength.percentage}%`,
-                                                    backgroundColor: passwordStrength.color
-                                                }
-                                            ]}
-                                        />
-                                    </View>
-                                    <Text style={[styles.strengthText, { color: passwordStrength.color, fontSize: responsiveFontSize(12) }]}>
-                                        {passwordStrength.strength}
-                                    </Text>
-                                </View>
-                            )}
+                            {/* Password Strength Indicator - New Animated Component */}
+                            <PasswordStrengthMeter password={password} />
                         </View>
 
                         <View style={styles.inputGroup}>
@@ -342,19 +339,26 @@ export default function AddPasswordScreen({ navigation, route }) {
                         </View>
                     </View>
 
-                    <TouchableOpacity
-                        style={[styles.button, loading && styles.buttonDisabled]}
+                    <GradientButton
                         onPress={handleSave}
+                        loading={loading}
                         disabled={loading}
+                        size="large"
+                        fullWidth
                     >
-                        {loading ? (
-                            <ActivityIndicator color="#fff" />
-                        ) : (
-                            <Text style={[styles.buttonText, { fontSize: responsiveFontSize(18) }]}>{isEditMode ? 'Update Password' : 'Save Password'}</Text>
-                        )}
-                    </TouchableOpacity>
+                        {isEditMode ? 'Update Password' : 'Save Password'}
+                    </GradientButton>
                 </ScrollView>
             </KeyboardAvoidingView>
+
+            {/* Success Animation */}
+            <SuccessAnimation
+                visible={showSuccessAnimation}
+                onComplete={() => {
+                    setShowSuccessAnimation(false);
+                    navigation.goBack();
+                }}
+            />
 
             {/* Custom Alert */}
             <CustomAlert
@@ -373,110 +377,62 @@ export default function AddPasswordScreen({ navigation, route }) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
+        backgroundColor: Colors.neutral.white,
     },
     content: {
         padding: 20,
         paddingBottom: 100,
     },
     headerTitle: {
-        // Dynamic fontSize set inline in component
-        fontWeight: 'bold',
-        color: '#212529',
+        fontWeight: FontWeights.bold,
+        color: Colors.text.primary,
         marginBottom: 6,
     },
     headerSubtitle: {
-        // Dynamic fontSize set inline in component
-        color: '#868e96',
+        color: Colors.text.secondary,
         marginBottom: 30,
     },
     form: {
         marginBottom: 24,
     },
     inputGroup: {
-        marginBottom: 18,
+        marginBottom: 20,
     },
     label: {
-        // Dynamic fontSize set inline in component
-        fontWeight: 'bold',
-        color: '#868e96',
+        fontWeight: FontWeights.bold,
+        color: Colors.text.secondary,
         marginBottom: 8,
         letterSpacing: 1,
+        fontSize: FontSizes.tiny,
     },
     input: {
-        backgroundColor: '#f8f9fa',
+        backgroundColor: Colors.neutral.gray100,
         borderWidth: 1,
-        borderColor: '#e9ecef',
+        borderColor: Colors.neutral.gray300,
         borderRadius: 12,
         padding: 16,
-        fontSize: 16,
-        color: '#212529',
+        fontSize: FontSizes.medium,
+        color: Colors.text.primary,
     },
     passwordContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#f8f9fa',
+        backgroundColor: Colors.neutral.gray100,
         borderWidth: 1,
-        borderColor: '#e9ecef',
+        borderColor: Colors.neutral.gray300,
         borderRadius: 12,
     },
     passwordInput: {
         flex: 1,
         padding: 16,
-        fontSize: 16,
-        color: '#212529',
+        fontSize: FontSizes.medium,
+        color: Colors.text.primary,
     },
     eyeButton: {
         padding: 16,
     },
-    eyeIcon: {
-        fontSize: 20,
-    },
-    strengthContainer: {
-        marginTop: 8,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    strengthBar: {
-        flex: 1,
-        height: 6,
-        backgroundColor: '#e9ecef',
-        borderRadius: 3,
-        overflow: 'hidden',
-    },
-    strengthFill: {
-        height: '100%',
-        borderRadius: 3,
-        transition: 'width 0.3s ease',
-    },
-    strengthText: {
-        // Dynamic fontSize set inline in component
-        fontWeight: 'bold',
-        minWidth: 80,
-        textAlign: 'right',
-    },
     commentsInput: {
         height: 80,
         textAlignVertical: 'top',
-    },
-    button: {
-        backgroundColor: '#007AFF',
-        paddingVertical: 18,
-        borderRadius: 12,
-        alignItems: 'center',
-        shadowColor: '#007AFF',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
-    },
-    buttonDisabled: {
-        backgroundColor: '#a5d8ff',
-    },
-    buttonText: {
-        color: '#fff',
-        // Dynamic fontSize set inline in component
-        fontWeight: 'bold',
     },
 });

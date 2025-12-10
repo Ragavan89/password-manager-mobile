@@ -18,12 +18,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, TextInput, Animated, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import * as HybridStorageService from '../services/HybridStorageService';
 import { decryptPassword } from '../services/Encryption';
 import * as Clipboard from 'expo-clipboard';
 import { getCurrentUser, onAuthChange } from '../services/FirebaseAuthService';
 import * as SecureStore from 'expo-secure-store';
 import { useResponsiveDimensions, useFontSizes } from '../utils/DimensionsHelper';
+import { Colors } from '../theme/colors';
+import { FontSizes, FontWeights } from '../theme/typography';
 
 export default function HomeScreen({ navigation }) {
     const insets = useSafeAreaInsets();
@@ -543,10 +546,11 @@ export default function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f8f9fa',
+        backgroundColor: Colors.background.light,
     },
     listContent: {
-        padding: 20,
+        paddingHorizontal: 20,
+        paddingTop: 8,
         paddingBottom: 120,
     },
     center: {
@@ -556,25 +560,25 @@ const styles = StyleSheet.create({
     },
     loadingText: {
         marginTop: 10,
-        color: '#6c757d',
-        fontSize: 16,
+        color: Colors.text.secondary,
+        fontSize: FontSizes.medium,
     },
     card: {
-        backgroundColor: '#fff',
+        backgroundColor: Colors.neutral.white,
         borderRadius: 16,
         marginBottom: 20,
         padding: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 3,
+        shadowColor: Colors.shadow.card,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 2,
         borderWidth: 1,
-        borderColor: '#f1f3f5',
+        borderColor: Colors.border.light,
     },
     unsyncedCard: {
-        backgroundColor: '#fff9db',
-        borderColor: '#ffd43b',
+        backgroundColor: Colors.warning.light,
+        borderColor: Colors.warning.solid,
         borderWidth: 1.5,
     },
     cardTablet: {
@@ -606,27 +610,27 @@ const styles = StyleSheet.create({
         width: 50,
         height: 50,
         borderRadius: 25,
-        backgroundColor: '#e7f5ff',
+        backgroundColor: Colors.primary.solid,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 15,
     },
     siteInitial: {
-        // Dynamic fontSize set inline in component
-        fontWeight: 'bold',
-        color: '#007AFF',
+        fontSize: FontSizes.large,
+        fontWeight: FontWeights.bold,
+        color: Colors.neutral.white,
     },
     headerText: {
         flex: 1,
     },
     siteName: {
-        // Dynamic fontSize set inline in component
-        fontWeight: 'bold',
-        color: '#212529',
+        fontSize: FontSizes.large,
+        fontWeight: FontWeights.bold,
+        color: Colors.text.primary,
     },
     username: {
-        // Dynamic fontSize set inline in component
-        color: '#868e96',
+        fontSize: FontSizes.small,
+        color: Colors.text.secondary,
         marginTop: 2,
     },
     divider: {
@@ -650,20 +654,20 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
     },
     label: {
-        // Dynamic fontSize set inline in component
-        fontWeight: 'bold',
-        color: '#adb5bd',
+        fontSize: FontSizes.tiny,
+        fontWeight: FontWeights.bold,
+        color: Colors.text.disabled,
         letterSpacing: 1,
         marginBottom: 4,
     },
     value: {
-        // Dynamic fontSize set inline in component
-        color: '#212529',
-        fontWeight: '500',
+        fontSize: FontSizes.medium,
+        color: Colors.text.primary,
+        fontWeight: FontWeights.medium,
     },
     password: {
-        // Dynamic fontSize set inline in component
-        color: '#495057',
+        fontSize: FontSizes.medium,
+        color: Colors.text.secondary,
         fontFamily: 'monospace',
     },
     timestamp: {
@@ -742,11 +746,11 @@ const styles = StyleSheet.create({
         lineHeight: 22,
     },
     dataLossWarningBanner: {
-        backgroundColor: '#ff8787',
+        backgroundColor: Colors.danger.solid,
         paddingVertical: 14,
         paddingHorizontal: 16,
         borderBottomWidth: 2,
-        borderBottomColor: '#fa5252',
+        borderBottomColor: Colors.danger.dark,
     },
     warningContent: {
         flexDirection: 'row',
@@ -761,72 +765,73 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     warningTitle: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: '#fff',
+        fontSize: FontSizes.small,
+        fontWeight: FontWeights.bold,
+        color: Colors.neutral.white,
         marginBottom: 6,
         letterSpacing: 0.5,
     },
     warningMessage: {
-        fontSize: 12,
-        color: '#fff',
+        fontSize: FontSizes.tiny,
+        color: Colors.neutral.white,
         lineHeight: 18,
         marginBottom: 6,
     },
     warningAction: {
-        fontSize: 12,
-        color: '#fff',
-        fontWeight: '600',
+        fontSize: FontSizes.tiny,
+        color: Colors.neutral.white,
+        fontWeight: FontWeights.semibold,
         fontStyle: 'italic',
     },
     offlineBanner: {
-        backgroundColor: '#fff3cd',
+        backgroundColor: Colors.warning.light,
         paddingVertical: 8,
         paddingHorizontal: 15,
         borderBottomWidth: 1,
-        borderBottomColor: '#ffc107',
+        borderBottomColor: Colors.warning.solid,
     },
     offlineText: {
-        color: '#856404',
-        fontSize: 13,
-        fontWeight: '600',
+        color: Colors.warning.dark,
+        fontSize: FontSizes.tiny,
+        fontWeight: FontWeights.semibold,
         textAlign: 'center',
     },
     syncingBanner: {
-        backgroundColor: '#e7f5ff',
+        backgroundColor: Colors.info.light,
         paddingVertical: 8,
         paddingHorizontal: 15,
         borderBottomWidth: 1,
-        borderBottomColor: '#74c0fc',
+        borderBottomColor: Colors.info.solid,
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
     },
     syncingText: {
-        color: '#1971c2',
-        fontSize: 13,
-        fontWeight: '600',
+        color: Colors.info.solid,
+        fontSize: FontSizes.tiny,
+        fontWeight: FontWeights.semibold,
     },
     lastSyncBanner: {
-        backgroundColor: '#d3f9d8',
+        backgroundColor: Colors.success.light,
         paddingVertical: 6,
         paddingHorizontal: 15,
         borderBottomWidth: 1,
-        borderBottomColor: '#8ce99a',
+        borderBottomColor: Colors.success.solid,
     },
     lastSyncText: {
-        color: '#2b8a3e',
-        fontSize: 11,
-        fontWeight: '500',
+        color: Colors.success.dark,
+        fontSize: FontSizes.tiny,
+        fontWeight: FontWeights.medium,
     },
     lastLoginContainer: {
         paddingHorizontal: 20,
-        paddingBottom: 8,
+        paddingVertical: 6,
         alignItems: 'center',
+        justifyContent: 'center',
     },
     lastLoginText: {
-        fontSize: 12,
-        color: '#868e96',
+        fontSize: FontSizes.tiny,
+        color: Colors.text.secondary,
         fontStyle: 'italic',
     },
     searchContainer: {

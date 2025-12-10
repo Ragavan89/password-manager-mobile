@@ -13,12 +13,18 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { View, TextInput, Text, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, Modal, ScrollView, ActivityIndicator } from 'react-native';
+import { View, TextInput, Text, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, Modal, ScrollView, ActivityIndicator, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import * as LocalAuthentication from 'expo-local-authentication';
 import CustomAlert from '../components/CustomAlert';
+import GradientButton from '../components/GradientButton';
 import { isMasterPasswordSet, isPINSet, verifyPIN, setupPIN } from '../services/Encryption';
 import { useResponsiveDimensions } from '../utils/DimensionsHelper';
+import { Colors, Gradients, Shadows } from '../theme/colors';
+import { FontSizes, FontWeights } from '../theme/typography';
 import * as SecureStore from 'expo-secure-store';
 
 export default function LoginScreen({ navigation }) {
@@ -214,7 +220,10 @@ export default function LoginScreen({ navigation }) {
                 style={styles.content}
             >
                 <View style={styles.header}>
-                    <Text style={styles.icon}>🔒</Text>
+                    {/* Simple Icon Circle */}
+                    <View style={styles.iconCircle}>
+                        <Ionicons name="lock-closed" size={40} color={Colors.primary.solid} />
+                    </View>
                     <Text style={styles.title}>CredVault</Text>
                     <Text style={styles.subtitle}>Enter your Master PIN to unlock</Text>
                 </View>
@@ -222,7 +231,7 @@ export default function LoginScreen({ navigation }) {
                 <View style={styles.form}>
                     {/* PIN Input Container with Overlay */}
                     <View style={styles.pinInputWrapper}>
-                        {/* PIN Digit Boxes */}
+                        {/* PIN Digit Boxes - Simple Borders */}
                         <View style={styles.pinContainer}>
                             {[0, 1, 2, 3].map((index) => (
                                 <View
@@ -232,7 +241,8 @@ export default function LoginScreen({ navigation }) {
                                         {
                                             width: isTablet ? scale(70) : scale(60),
                                             height: isTablet ? scale(80) : scale(70),
-                                        }
+                                        },
+                                        pin.length > index && styles.pinBoxFilled
                                     ]}
                                 >
                                     <Text style={[styles.pinDot, { fontSize: responsiveFontSize(40) }]}>
@@ -257,21 +267,29 @@ export default function LoginScreen({ navigation }) {
                         />
                     </View>
 
-                    <TouchableOpacity style={styles.button} onPress={handleLogin}>
-                        <Text style={styles.buttonText}>Unlock Vault</Text>
-                    </TouchableOpacity>
+                    <GradientButton
+                        onPress={handleLogin}
+                        size="large"
+                        fullWidth
+                    >
+                        Unlock Vault
+                    </GradientButton>
 
                     {/* Forgot PIN Link */}
                     <TouchableOpacity
                         style={styles.forgotPinContainer}
                         onPress={handleForgotPin}
+                        activeOpacity={0.8}
                     >
-                        <Text style={styles.forgotPinText}>Forgot PIN?</Text>
-                        <Text style={styles.forgotPinSubtext}>
-                            {biometricAvailable
-                                ? 'Reset using your device unlock'
-                                : 'Reset using device authentication'}
-                        </Text>
+                        <Ionicons name="help-circle-outline" size={20} color={Colors.primary.solid} />
+                        <View style={styles.forgotPinTextContainer}>
+                            <Text style={styles.forgotPinText}>Forgot PIN?</Text>
+                            <Text style={styles.forgotPinSubtext}>
+                                {biometricAvailable
+                                    ? 'Reset using your device unlock'
+                                    : 'Reset using device authentication'}
+                            </Text>
+                        </View>
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
@@ -294,7 +312,9 @@ export default function LoginScreen({ navigation }) {
                             showsVerticalScrollIndicator={true}
                         >
                             <View style={styles.modalHeader}>
-                                <Text style={styles.modalIcon}>✅</Text>
+                                <View style={styles.modalIconContainer}>
+                                    <Ionicons name="checkmark-circle" size={56} color={Colors.success.solid} />
+                                </View>
                                 <Text style={styles.modalTitle}>Identity Verified</Text>
                                 <Text style={styles.modalSubtitle}>
                                     Create a new 4-digit PIN to secure your vault
@@ -328,7 +348,7 @@ export default function LoginScreen({ navigation }) {
                                 />
 
                                 <View style={styles.infoBox}>
-                                    <Text style={styles.infoIcon}>💡</Text>
+                                    <Ionicons name="information-circle" size={20} color={Colors.info.solid} style={{ marginRight: 8 }} />
                                     <Text style={styles.infoText}>
                                         Choose a PIN you'll remember but others can't guess. Avoid simple patterns like 1234 or 0000.
                                     </Text>
@@ -365,7 +385,7 @@ export default function LoginScreen({ navigation }) {
                 <View style={styles.legalLinks}>
                     <TouchableOpacity onPress={() => Alert.alert(
                         'Terms of Service',
-                        'By using CredVault, you agree to:\n\n1. Security: You are responsible for maintaining the confidentiality of your Master PIN and recovery methods.\n\n2. Liability: This software is provided "as is". We are not liable for any data loss or security breaches resulting from device compromise or lost credentials.\n\n3. Usage: This app is for personal use.\n\n4. Updates: We may update these terms to reflect app changes.',
+                        'Last Updated: December 11, 2025\n\nBy using CredVault, you agree to:\n\n1. ELIGIBILITY: You must be at least 13 years old to use this app.\n\n2. SECURITY: You are solely responsible for maintaining the confidentiality of your Master PIN, Master Password, and any recovery methods. Never share these credentials.\n\n3. LIABILITY: This software is provided "as is" without warranties. We are not liable for data loss, security breaches, or damages resulting from device compromise, lost credentials, or unauthorized access.\n\n4. USAGE: This app is for personal, non-commercial use only. Do not use it for illegal activities.\n\n5. ACCOUNT TERMINATION: You may delete your account anytime via Settings. Cloud data will be permanently deleted within 30 days.\n\n6. UPDATES: We may update these terms. Continued use after changes constitutes acceptance.\n\n7. CONTACT: For support, email veni.digital.dev@gmail.com',
                         [{ text: 'I Agree' }]
                     )}>
                         <Text style={styles.legalLinkText}>Terms</Text>
@@ -373,7 +393,7 @@ export default function LoginScreen({ navigation }) {
                     <Text style={styles.legalSeparator}>•</Text>
                     <TouchableOpacity onPress={() => Alert.alert(
                         'Privacy Policy',
-                        'Your privacy is our priority.\n\n1. Data Ownership: You own your data. Passwords are stored locally on your device and synced to Firebase cloud storage when enabled.\n\n2. Encryption: All sensitive data is encrypted using AES-256 before storage.\n\n3. No Tracking: We do not collect, track, or sell your personal information.\n\n4. Permissions: Internet access is required only for syncing with cloud storage.',
+                        'Last Updated: December 11, 2025\n\nYour privacy is our priority.\n\n1. DATA OWNERSHIP: You own your data. Passwords are stored locally on your device and optionally synced to Google Firebase Cloud Firestore when cloud sync is enabled.\n\n2. ENCRYPTION: All sensitive data (passwords, notes) is encrypted using AES-256-GCM encryption before storage. Your Master Password never leaves your device.\n\n3. DATA COLLECTION: We do NOT collect, track, analyze, or sell your personal information. No analytics, no ads, no third-party tracking.\n\n4. CLOUD STORAGE: If you enable cloud sync, your encrypted data is stored on Google Firebase (USA). Google\'s privacy policy applies to cloud infrastructure.\n\n5. PERMISSIONS: Internet access is required only for optional cloud sync. The app works fully offline.\n\n6. DATA DELETION: You can delete all local data and cloud data anytime via Settings → Sign Out or uninstall. Cloud data deletion is permanent and irreversible.\n\n7. SECURITY: We use industry-standard encryption. However, if you lose your Master Password or PIN, we CANNOT recover your data.\n\n8. CHILDREN: This app is not intended for children under 13.\n\n9. CONTACT: Questions? Email veni.digital.dev@gmail.com\n\nFull policy: sites.google.com/view/credvault-privacy',
                         [{ text: 'Close' }]
                     )}>
                         <Text style={styles.legalLinkText}>Privacy</Text>
@@ -397,7 +417,7 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
+        backgroundColor: Colors.neutral.white,
     },
     content: {
         flex: 1,
@@ -408,19 +428,26 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 50,
     },
-    icon: {
-        fontSize: 60,
-        marginBottom: 20,
+    iconCircle: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: Colors.neutral.gray50,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 24,
+        borderWidth: 2,
+        borderColor: Colors.border.light,
     },
     title: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#212529',
-        marginBottom: 10,
+        fontSize: FontSizes.h1,
+        fontWeight: FontWeights.bold,
+        color: Colors.text.primary,
+        marginBottom: 12,
     },
     subtitle: {
-        fontSize: 16,
-        color: '#868e96',
+        fontSize: FontSizes.medium,
+        color: Colors.text.secondary,
         textAlign: 'center',
     },
     form: {
@@ -428,7 +455,7 @@ const styles = StyleSheet.create({
     },
     pinInputWrapper: {
         position: 'relative',
-        marginBottom: 30,
+        marginBottom: 40,
     },
     pinContainer: {
         flexDirection: 'row',
@@ -436,18 +463,21 @@ const styles = StyleSheet.create({
         gap: 16,
     },
     pinBox: {
-        // Dynamic width/height set inline in component
-        backgroundColor: '#f8f9fa',
+        backgroundColor: Colors.neutral.white,
         borderWidth: 2,
-        borderColor: '#007AFF',
-        borderRadius: 16,
+        borderColor: Colors.border.medium,
+        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
+        ...Shadows.small,
+    },
+    pinBoxFilled: {
+        borderColor: Colors.success.solid,
+        backgroundColor: Colors.success.light,
     },
     pinDot: {
-        // Dynamic fontSize set inline in component
-        color: '#007AFF',
-        fontWeight: 'bold',
+        color: Colors.primary.solid,
+        fontWeight: FontWeights.bold,
     },
     overlayInput: {
         position: 'absolute',
@@ -458,40 +488,30 @@ const styles = StyleSheet.create({
         opacity: 0,
         fontSize: 1,
     },
-    button: {
-        backgroundColor: '#007AFF',
-        paddingVertical: 18,
-        borderRadius: 12,
-        alignItems: 'center',
-        shadowColor: '#007AFF',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
-    },
-    buttonText: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
     forgotPinContainer: {
-        marginTop: 30,
+        marginTop: 24,
+        flexDirection: 'row',
         alignItems: 'center',
-        padding: 15,
-        backgroundColor: '#f8f9fa',
+        justifyContent: 'center',
+        padding: 16,
+        backgroundColor: Colors.neutral.gray50,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#e9ecef',
+        borderColor: Colors.border.light,
+        gap: 12,
+    },
+    forgotPinTextContainer: {
+        alignItems: 'flex-start',
     },
     forgotPinText: {
-        fontSize: 16,
-        color: '#007AFF',
-        fontWeight: '600',
+        fontSize: FontSizes.medium,
+        color: Colors.primary.solid,
+        fontWeight: FontWeights.semibold,
         marginBottom: 4,
     },
     forgotPinSubtext: {
-        fontSize: 12,
-        color: '#6c757d',
+        fontSize: FontSizes.tiny,
+        color: Colors.text.secondary,
         textAlign: 'center',
     },
     modalOverlay: {
@@ -500,30 +520,30 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     modalContent: {
-        backgroundColor: '#fff',
+        backgroundColor: Colors.neutral.white,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         padding: 24,
         paddingBottom: 40,
         maxHeight: '80%',
+        ...Shadows.large,
     },
     modalHeader: {
         alignItems: 'center',
         marginBottom: 30,
     },
-    modalIcon: {
-        fontSize: 48,
-        marginBottom: 12,
+    modalIconContainer: {
+        marginBottom: 16,
     },
     modalTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#212529',
+        fontSize: FontSizes.h3,
+        fontWeight: FontWeights.bold,
+        color: Colors.text.primary,
         marginBottom: 8,
     },
     modalSubtitle: {
-        fontSize: 14,
-        color: '#6c757d',
+        fontSize: FontSizes.small,
+        color: Colors.text.secondary,
         textAlign: 'center',
         paddingHorizontal: 20,
     },
@@ -531,42 +551,39 @@ const styles = StyleSheet.create({
         marginBottom: 24,
     },
     inputLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#495057',
+        fontSize: FontSizes.small,
+        fontWeight: FontWeights.semibold,
+        color: Colors.text.secondary,
         marginBottom: 8,
         marginTop: 12,
     },
     modalInput: {
-        backgroundColor: '#f8f9fa',
+        backgroundColor: Colors.neutral.gray100,
         borderWidth: 1,
-        borderColor: '#dee2e6',
+        borderColor: Colors.border.medium,
         borderRadius: 12,
         padding: 16,
         marginRight: 8,
         fontSize: 24,
         textAlign: 'center',
         letterSpacing: 8,
-        color: '#212529',
-        fontWeight: 'bold',
+        color: Colors.text.primary,
+        fontWeight: FontWeights.bold,
     },
     infoBox: {
         flexDirection: 'row',
-        backgroundColor: '#e7f5ff',
+        backgroundColor: Colors.info.light,
         padding: 12,
         borderRadius: 12,
         marginTop: 16,
-        borderLeftWidth: 4,
-        borderLeftColor: '#1971c2',
-    },
-    infoIcon: {
-        fontSize: 20,
-        marginRight: 8,
+        borderLeftWidth: 3,
+        borderLeftColor: Colors.info.solid,
+        alignItems: 'flex-start',
     },
     infoText: {
         flex: 1,
-        fontSize: 12,
-        color: '#495057',
+        fontSize: FontSizes.tiny,
+        color: Colors.text.secondary,
         lineHeight: 18,
     },
     modalButtons: {
@@ -578,52 +595,55 @@ const styles = StyleSheet.create({
         paddingVertical: 16,
         borderRadius: 12,
         alignItems: 'center',
-        backgroundColor: '#f8f9fa',
+        backgroundColor: Colors.neutral.gray100,
         borderWidth: 1,
-        borderColor: '#dee2e6',
+        borderColor: Colors.border.medium,
     },
     cancelButtonText: {
-        color: '#495057',
-        fontSize: 16,
-        fontWeight: '600',
+        color: Colors.text.secondary,
+        fontSize: FontSizes.medium,
+        fontWeight: FontWeights.semibold,
     },
     saveButton: {
         flex: 1,
         paddingVertical: 16,
         borderRadius: 12,
         alignItems: 'center',
-        backgroundColor: '#007AFF',
+        backgroundColor: Colors.primary.solid,
     },
     saveButtonDisabled: {
         opacity: 0.6,
     },
     saveButtonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: 'bold',
+        color: Colors.neutral.white,
+        fontSize: FontSizes.medium,
+        fontWeight: FontWeights.bold,
     },
     footer: {
         padding: 20,
         alignItems: 'center',
-        marginBottom: 40,
+        backgroundColor: Colors.neutral.gray50,
+        borderTopWidth: 1,
+        borderTopColor: Colors.border.light,
     },
     copyrightText: {
-        fontSize: 12,
-        color: '#adb5bd',
+        fontSize: FontSizes.tiny,
+        color: Colors.text.secondary,
         marginBottom: 8,
     },
     legalLinks: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 12,
     },
     legalLinkText: {
-        fontSize: 12,
-        color: '#868e96',
+        fontSize: FontSizes.tiny,
+        color: Colors.primary.solid,
         textDecorationLine: 'underline',
+        fontWeight: FontWeights.semibold,
     },
     legalSeparator: {
-        fontSize: 12,
-        color: '#adb5bd',
-        marginHorizontal: 8,
+        fontSize: FontSizes.tiny,
+        color: Colors.text.disabled,
     },
 });
