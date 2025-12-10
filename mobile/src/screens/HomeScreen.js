@@ -38,6 +38,7 @@ export default function HomeScreen({ navigation }) {
     const [decryptedPasswords, setDecryptedPasswords] = useState({});
     const [cloudSyncEnabled, setCloudSyncEnabled] = useState(null); // null = not determined yet
     const [lastSyncTime, setLastSyncTime] = useState(null);
+    const [lastLoginTime, setLastLoginTime] = useState(null);
     const [isAuthStateReady, setIsAuthStateReady] = useState(false);
 
     // Listen to auth state changes to update sync status
@@ -71,12 +72,22 @@ export default function HomeScreen({ navigation }) {
         useCallback(() => {
             // Load passwords without triggering sync on focus (to avoid delays)
             loadPasswords({ silent: false, skipSync: true });
+            loadLastLoginTime();
             // Only reload sync status if auth state is ready
             if (isAuthStateReady) {
                 loadCloudSyncStatus();
             }
         }, [isAuthStateReady])
     );
+
+    const loadLastLoginTime = async () => {
+        try {
+            const timestamp = await SecureStore.getItemAsync('LAST_LOGIN_TIMESTAMP');
+            setLastLoginTime(timestamp);
+        } catch (error) {
+            console.error('Error loading last login time:', error);
+        }
+    };
 
     const loadCloudSyncStatus = async () => {
         try {
@@ -314,7 +325,11 @@ export default function HomeScreen({ navigation }) {
     const renderItem = ({ item }) => {
         const displayPassword = decryptedPasswords[item.id];
         const isExpanded = expandedCards[item.id];
-        const isUnsynced = item.cloudSynced === 0;
+        // Only show yellow 'Not Synced' highlight if:
+        // 1. Cloud sync is explicitly ENABLED by the user
+        // 2. The item itself has not been synced (cloudSynced === 0)
+        // If sync is disabled, everything is local-only by design, so no warning needed.
+        const isUnsynced = cloudSyncEnabled && item.cloudSynced === 0;
 
         return (
             <View style={[styles.card, isUnsynced && styles.unsyncedCard, isTablet && styles.cardTablet]}>
@@ -472,12 +487,21 @@ export default function HomeScreen({ navigation }) {
                         </TouchableOpacity>
                     )}
                 </View>
-                    {searchQuery.length > 0 && (
-                        <Text style={[styles.resultCount, { fontSize: responsiveFontSize(12) }]}>
-                            {filteredPasswords.length} result{filteredPasswords.length !== 1 ? 's' : ''} found
-                        </Text>
-                    )}
+                {searchQuery.length > 0 && (
+                    <Text style={[styles.resultCount, { fontSize: responsiveFontSize(12) }]}>
+                        {filteredPasswords.length} result{filteredPasswords.length !== 1 ? 's' : ''} found
+                    </Text>
+                )}
             </View>
+
+            {/* Last Login Indicator */}
+            {lastLoginTime && (
+                <View style={styles.lastLoginContainer}>
+                    <Text style={styles.lastLoginText}>
+                        Last logged in: {formatDate(lastLoginTime)}
+                    </Text>
+                </View>
+            )}
 
             <FlatList
                 data={filteredPasswords}
@@ -794,7 +818,16 @@ const styles = StyleSheet.create({
         color: '#2b8a3e',
         fontSize: 11,
         fontWeight: '500',
-        textAlign: 'center',
+    },
+    lastLoginContainer: {
+        paddingHorizontal: 20,
+        paddingBottom: 8,
+        alignItems: 'center',
+    },
+    lastLoginText: {
+        fontSize: 12,
+        color: '#868e96',
+        fontStyle: 'italic',
     },
     searchContainer: {
         backgroundColor: '#fff',

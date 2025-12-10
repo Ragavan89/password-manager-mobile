@@ -688,7 +688,7 @@ export const resetSaltVerification = () => {
  */
 const clearEncryptionKeyCache = async () => {
     try {
-        await SecureStore.deleteItemAsync('keyvault_encryption_key');
+        await SecureStore.deleteItemAsync('credvault_encryption_key');
         console.log('✅ Encryption key cache cleared (from UserSaltService)');
     } catch (error) {
         console.error('Error clearing encryption key cache:', error);

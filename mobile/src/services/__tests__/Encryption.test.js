@@ -23,7 +23,7 @@ describe('Encryption Service Tests', () => {
 
                 expect(result.success).toBe(true);
                 expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
-                    'keyvault_user_pin_hash',
+                    'credvault_user_pin_hash',
                     expect.any(String)
                 );
             });
@@ -128,15 +128,15 @@ describe('Encryption Service Tests', () => {
                 expect(result.success).toBe(true);
                 expect(SecureStore.setItemAsync).toHaveBeenCalledTimes(3);
                 expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
-                    'keyvault_master_password_hash',
+                    'credvault_master_password_hash',
                     expect.any(String)
                 );
                 expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
-                    'keyvault_encryption_key',
+                    'credvault_encryption_key',
                     expect.any(String)
                 );
                 expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
-                    'keyvault_master_password_encrypted',
+                    'credvault_master_password_encrypted',
                     expect.any(String)
                 );
             });

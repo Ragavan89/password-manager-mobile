@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "KeyVault Pro",
-    "slug": "mobile",
+    "name": "CredVault",
+    "slug": "credvault",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,7 +16,7 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.veni.keyvault",
+      "package": "com.venidigital.credvault",
       "versionCode": 1,
       "minSdkVersion": 21,
       "targetSdkVersion": 34,

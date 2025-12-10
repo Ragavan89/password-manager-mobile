@@ -27,10 +27,10 @@ import * as Database from './Database';
 
 // Keys for SecureStore
 // Keys for SecureStore
-const MASTER_PASSWORD_KEY = 'keyvault_master_password_hash';
-const MASTER_PASSWORD_ENCRYPTED_KEY = 'keyvault_master_password_encrypted'; // For retrieval
-const ENCRYPTION_KEY_KEY = 'keyvault_encryption_key';
-const PIN_KEY = 'keyvault_user_pin_hash';
+const MASTER_PASSWORD_KEY = 'credvault_master_password_hash';
+const MASTER_PASSWORD_ENCRYPTED_KEY = 'credvault_master_password_encrypted'; // For retrieval
+const ENCRYPTION_KEY_KEY = 'credvault_encryption_key';
+const PIN_KEY = 'credvault_user_pin_hash';
 
 /**
  * Checks if a PIN has been set

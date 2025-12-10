@@ -14,7 +14,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, Alert, ScrollView, TouchableOpacity, Modal, ActivityIndicator, TextInput, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, StyleSheet, Text, Alert, ScrollView, TouchableOpacity, Modal, ActivityIndicator, TextInput, Platform, KeyboardAvoidingView, Linking } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as Clipboard from 'expo-clipboard';
 import { verifyPIN, getMasterPassword, clearEncryptionKeyCache } from '../services/Encryption';
@@ -522,6 +522,20 @@ export default function SettingsScreen({ navigation }) {
                         </View>
                     )
                 }
+
+                {/* Legal Section */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>⚖️ Legal</Text>
+                    <View style={styles.card}>
+                        <TouchableOpacity
+                            style={styles.secondaryButton}
+                            onPress={() => Linking.openURL('https://sites.google.com/view/privacypolicyforkeyvault/home')}
+                        >
+                            <Text style={styles.secondaryButtonText}>📄 Privacy Policy</Text>
+                        </TouchableOpacity>
+                        <Text style={[styles.hint, { marginTop: 10 }]}>Version 1.0.0</Text>
+                    </View>
+                </View>
 
                 {/* Security Note */}
                 <View style={styles.securityNote}>

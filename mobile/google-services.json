@@ -33,6 +33,35 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:909731735542:android:6658ff22403f67380289d7",
+        "android_client_info": {
+          "package_name": "com.venidigital.credvault"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "909731735542-im2p55fi765s2im1114it7itvrbg819m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAywjQaS3L1CafHJli1fxGkYZFWglC5r-k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "909731735542-im2p55fi765s2im1114it7itvrbg819m.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"
