@@ -21,7 +21,7 @@ import * as Haptics from 'expo-haptics';
 import * as LocalAuthentication from 'expo-local-authentication';
 import CustomAlert from '../components/CustomAlert';
 import GradientButton from '../components/GradientButton';
-import { isMasterPasswordSet, isPINSet, verifyPIN, setupPIN } from '../services/Encryption';
+import { isMasterPasswordSet, isPINSet, verifyPIN, setupPIN, verifyPanicPIN, setPanicMode, checkLockoutStatus, recordFailedAttempt, resetFailedAttempts } from '../services/Encryption';
 import { useResponsiveDimensions } from '../utils/DimensionsHelper';
 import { Colors, Gradients, Shadows } from '../theme/colors';
 import { FontSizes, FontWeights } from '../theme/typography';
@@ -68,10 +68,36 @@ export default function LoginScreen({ navigation }) {
     };
 
     const handleLogin = async () => {
+        // 1. Check for existing lockout (Security)
+        const { isLocked, remainingSeconds } = await checkLockoutStatus();
+        if (isLocked) {
+            const minutes = Math.ceil(remainingSeconds / 60);
+            setAlertConfig({
+                visible: true,
+                title: 'App Locked',
+                message: `Too many failed attempts. Please try again in ${minutes} minute(s).`,
+                type: 'error',
+                buttons: [{ text: 'OK', style: 'default' }]
+            });
+            return;
+        }
+
         // Verify PIN
         const isValid = await verifyPIN(pin);
+        const isPanic = await verifyPanicPIN(pin);
 
-        if (isValid) {
+        if (isValid || isPanic) {
+
+            // ✅ Success: Reset limits
+            await resetFailedAttempts();
+
+            // Set Panic Mode state for the session
+            if (isPanic) {
+                setPanicMode(true);
+            } else {
+                setPanicMode(false);
+            }
+
             try {
                 // Save last login timestamp
                 await SecureStore.setItemAsync('LAST_LOGIN_TIMESTAMP', new Date().toISOString());
@@ -92,13 +118,26 @@ export default function LoginScreen({ navigation }) {
                 navigation.replace('Home');
             }
         } else {
-            setAlertConfig({
-                visible: true,
-                title: 'Invalid PIN',
-                message: 'The PIN you entered is incorrect. Please try again.',
-                type: 'error',
-                buttons: [{ text: 'Try Again', style: 'default' }]
-            });
+            // Ssecurity: Record failure
+            const { locked, minutes } = await recordFailedAttempt();
+
+            if (locked) {
+                setAlertConfig({
+                    visible: true,
+                    title: 'App Locked',
+                    message: `Too many failed attempts. Application locked for ${minutes} minutes.`,
+                    type: 'error',
+                    buttons: [{ text: 'OK', style: 'default' }]
+                });
+            } else {
+                setAlertConfig({
+                    visible: true,
+                    title: 'Invalid PIN',
+                    message: 'The PIN you entered is incorrect. Please try again.',
+                    type: 'error',
+                    buttons: [{ text: 'Try Again', style: 'default' }]
+                });
+            }
             setPin('');
         }
     };

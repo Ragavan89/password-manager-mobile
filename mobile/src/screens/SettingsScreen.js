@@ -18,7 +18,7 @@ import { View, StyleSheet, Text, Alert, ScrollView, TouchableOpacity, Modal, Act
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import * as Clipboard from 'expo-clipboard';
-import { verifyPIN, getMasterPassword, clearEncryptionKeyCache } from '../services/Encryption';
+import { verifyPIN, getMasterPassword, clearEncryptionKeyCache, isPanicPINSet, setupPanicPIN, removePanicPIN, isPanicMode } from '../services/Encryption';
 import { clearUserSaltCache, preserveCurrentSaltForOffline } from '../services/UserSaltService';
 import { isMasterPasswordRequired } from '../config/EncryptionConfig';
 import { getCurrentUser, signOut } from '../services/FirebaseAuthService';
@@ -50,6 +50,13 @@ export default function SettingsScreen({ navigation }) {
     const [showMasterPassword, setShowMasterPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
+    // Panic PIN states
+    const [hasPanicPin, setHasPanicPin] = useState(false);
+    const [showPanicSetupModal, setShowPanicSetupModal] = useState(false);
+    const [panicSetupStep, setPanicSetupStep] = useState('initial'); // initial, confirm
+    const [tempPanicPin, setTempPanicPin] = useState('');
+    const [panicPinInput, setPanicPinInput] = useState('');
+
     // Custom Alert state
     const [alertConfig, setAlertConfig] = useState({
         visible: false,
@@ -68,9 +75,15 @@ export default function SettingsScreen({ navigation }) {
     useEffect(() => {
         const unsubscribe = navigation.addListener('focus', () => {
             loadCloudSyncStatus();
+            checkPanicPinStatus();
         });
         return unsubscribe;
     }, [navigation]);
+
+    const checkPanicPinStatus = async () => {
+        const isSet = await isPanicPINSet();
+        setHasPanicPin(isSet);
+    };
 
     const loadCloudSyncStatus = async () => {
         try {
@@ -127,12 +140,21 @@ export default function SettingsScreen({ navigation }) {
                 }
             }
 
-            setCloudSyncEnabled(isActuallyEnabled);
+            // Panic Mode Override: Always show sync as disabled
+            if (isPanicMode()) {
+                console.log("🚨 PANIC MODE: Spoofing cloud sync as disabled.");
+                setCloudSyncEnabled(false);
+                setSubscriptionTier('free');
+                setCloudLimit(AppConfig.DEFAULT_CLOUD_PASSWORD_LIMIT);
+            } else {
+                setCloudSyncEnabled(isActuallyEnabled);
+                setCloudLimit(limit);
+                setSubscriptionTier(tier);
+                setTierLimits(limits);
+            }
+
             setUserEmail(email || '');
             setLastSyncTime(lastSync);
-            setCloudLimit(limit);
-            setSubscriptionTier(tier);
-            setTierLimits(limits);
         } catch (error) {
             console.error('Error loading cloud sync status:', error);
             // On error, verify user status synchronously as fallback
@@ -346,6 +368,71 @@ export default function SettingsScreen({ navigation }) {
         setPin('');
     };
 
+    const handleStartPanicSetup = () => {
+        setPanicSetupStep('initial');
+        setPanicPinInput('');
+        setTempPanicPin('');
+        setShowPanicSetupModal(true);
+    };
+
+    const handlePanicPinSubmit = async () => {
+        if (panicPinInput.length !== 4) {
+            Alert.alert('Error', 'PIN must be 4 digits.');
+            return;
+        }
+
+        if (panicSetupStep === 'initial') {
+            setTempPanicPin(panicPinInput);
+            setPanicPinInput('');
+            setPanicSetupStep('confirm');
+        } else {
+            // Confirm step
+            if (panicPinInput !== tempPanicPin) {
+                Alert.alert('Error', 'PINs do not match. Try again.');
+                setPanicSetupStep('initial');
+                setTempPanicPin('');
+                setPanicPinInput('');
+                return;
+            }
+
+            // Save it
+            const result = await setupPanicPIN(panicPinInput);
+            if (result.success) {
+                Alert.alert('Success', 'Panic PIN set successfully. \n\nUse this PIN at login to open a fake empty vault.');
+                setHasPanicPin(true);
+                setShowPanicSetupModal(false);
+            } else {
+                Alert.alert('Error', result.error);
+                setPanicSetupStep('initial');
+                setTempPanicPin('');
+                setPanicPinInput('');
+            }
+        }
+    };
+
+    const handleRemovePanicPin = () => {
+        Alert.alert(
+            'Remove Panic PIN',
+            'Are you sure you want to remove the Panic PIN?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Remove',
+                    style: 'destructive',
+                    onPress: async () => {
+                        const result = await removePanicPIN();
+                        if (result.success) {
+                            setHasPanicPin(false);
+                            Alert.alert('Success', 'Panic PIN removed.');
+                        } else {
+                            Alert.alert('Error', result.error);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     return (
         <View style={styles.safeArea}>
             <ScrollView
@@ -506,6 +593,38 @@ export default function SettingsScreen({ navigation }) {
                     )}
                 </View>
 
+
+                {/* Panic PIN Section */}
+                {!isPanicMode() && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>🚨 Emergency Safety</Text>
+                        <View style={styles.card}>
+                            <Text style={styles.cardTitle}>Panic PIN (Decoy Mode)</Text>
+                            <Text style={styles.cardDescription}>
+                                Create a separate PIN that opens a fake, empty vault.
+                                {'\n'}{'\n'}
+                                If you are ever forced to unlock your app, use this PIN. It looks real but hides all your passwords.
+                            </Text>
+
+                            {hasPanicPin ? (
+                                <TouchableOpacity
+                                    style={styles.dangerButton}
+                                    onPress={handleRemovePanicPin}
+                                >
+                                    <Text style={styles.dangerButtonText}>Remove Panic PIN</Text>
+                                </TouchableOpacity>
+                            ) : (
+                                <TouchableOpacity
+                                    style={styles.secondaryButton}
+                                    onPress={handleStartPanicSetup}
+                                >
+                                    <Text style={styles.secondaryButtonText}>⚠️ Set Up Panic PIN</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+                )}
+
                 {/* Master Password Section */}
                 {
                     isMasterPasswordRequired() && (
@@ -608,6 +727,63 @@ export default function SettingsScreen({ navigation }) {
                                 >
                                     <Text style={styles.verifyButtonText}>
                                         {isLoading ? 'Verifying...' : 'Verify'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </KeyboardAvoidingView>
+                </Modal>
+
+                {/* Panic PIN Setup Modal */}
+                <Modal
+                    visible={showPanicSetupModal}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={() => setShowPanicSetupModal(false)}
+                >
+                    <KeyboardAvoidingView
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        style={styles.modalOverlay}
+                    >
+                        <View style={styles.modalContent}>
+                            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                                <Ionicons name="warning-outline" size={48} color={Colors.warning.solid} />
+                            </View>
+                            <Text style={styles.modalTitle}>
+                                {panicSetupStep === 'initial' ? 'Set Panic PIN' : 'Confirm Panic PIN'}
+                            </Text>
+                            <Text style={styles.modalDescription}>
+                                {panicSetupStep === 'initial'
+                                    ? 'Choose a 4-digit PIN different from your main PIN.'
+                                    : 'Re-enter to confirm.'}
+                            </Text>
+
+                            <TextInput
+                                style={styles.pinInput}
+                                placeholder="0000"
+                                placeholderTextColor="#999"
+                                value={panicPinInput}
+                                onChangeText={setPanicPinInput}
+                                keyboardType="number-pad"
+                                maxLength={4}
+                                secureTextEntry
+                                autoFocus
+                            />
+
+                            <View style={styles.modalButtons}>
+                                <TouchableOpacity
+                                    style={[styles.modalButton, styles.cancelButton]}
+                                    onPress={() => setShowPanicSetupModal(false)}
+                                >
+                                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[styles.modalButton, styles.verifyButton]}
+                                    onPress={handlePanicPinSubmit}
+                                >
+                                    <Text style={styles.verifyButtonText}>
+                                        {panicSetupStep === 'initial' ? 'Next' : 'Save'}
                                     </Text>
                                 </TouchableOpacity>
                             </View>

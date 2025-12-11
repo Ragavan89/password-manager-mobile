@@ -31,6 +31,10 @@ const MASTER_PASSWORD_KEY = 'credvault_master_password_hash';
 const MASTER_PASSWORD_ENCRYPTED_KEY = 'credvault_master_password_encrypted'; // For retrieval
 const ENCRYPTION_KEY_KEY = 'credvault_encryption_key';
 const PIN_KEY = 'credvault_user_pin_hash';
+const PANIC_PIN_KEY = 'credvault_user_panic_pin_hash';
+const PANIC_MODE_KEY = 'credvault_is_panic_mode';
+const LOCKOUT_ATTEMPTS_KEY = 'credvault_failed_pin_attempts';
+const LOCKOUT_TIMESTAMP_KEY = 'credvault_lockout_end_timestamp';
 
 /**
  * Checks if a PIN has been set
@@ -83,6 +87,167 @@ export const verifyPIN = async (pin) => {
     } catch (error) {
         console.error('Error verifying PIN:', error);
         return false;
+    }
+};
+
+/**
+ * Checks if a Panic PIN has been set
+ */
+export const isPanicPINSet = async () => {
+    try {
+        const hash = await SecureStore.getItemAsync(PANIC_PIN_KEY);
+        return !!hash;
+    } catch (error) {
+        return false;
+    }
+};
+
+/**
+ * Sets up the Panic PIN
+ */
+export const setupPanicPIN = async (pin) => {
+    try {
+        if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+            return { success: false, error: 'PIN must be exactly 4 digits' };
+        }
+
+        // Must not be same as regular PIN
+        const regularPinHash = await SecureStore.getItemAsync(PIN_KEY);
+        const inputHash = CryptoJS.SHA256(pin).toString();
+
+        if (regularPinHash && regularPinHash === inputHash) {
+            return { success: false, error: 'Panic PIN cannot be the same as your regular PIN' };
+        }
+
+        await SecureStore.setItemAsync(PANIC_PIN_KEY, inputHash);
+        return { success: true };
+    } catch (error) {
+        console.error('Error setting Panic PIN:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+/**
+ * Removes the Panic PIN
+ */
+export const removePanicPIN = async () => {
+    try {
+        await SecureStore.deleteItemAsync(PANIC_PIN_KEY);
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+};
+
+/**
+ * Verifies if the input is the Panic PIN
+ */
+export const verifyPanicPIN = async (pin) => {
+    try {
+        const storedHash = await SecureStore.getItemAsync(PANIC_PIN_KEY);
+        if (!storedHash) return false;
+
+        const inputHash = CryptoJS.SHA256(pin).toString();
+        return inputHash === storedHash;
+    } catch (error) {
+        console.error('Error verifying Panic PIN:', error);
+        return false;
+    }
+};
+
+/**
+ * Sets the app into Panic Mode state
+ */
+let _isPanicModeActive = false;
+
+export const setPanicMode = (isActive) => {
+    _isPanicModeActive = isActive;
+    if (isActive) console.warn("🚨 PANIC MODE ACTIVATED 🚨");
+};
+
+export const isPanicMode = () => {
+    return _isPanicModeActive;
+};
+
+
+/**
+ * LOCKOUT MECHANISM
+ */
+
+/**
+ * Checks if the user is currently locked out
+ * @returns {Promise<{isLocked: boolean, remainingSeconds: number}>}
+ */
+export const checkLockoutStatus = async () => {
+    try {
+        const lockoutEndStr = await SecureStore.getItemAsync(LOCKOUT_TIMESTAMP_KEY);
+        if (!lockoutEndStr) return { isLocked: false, remainingSeconds: 0 };
+
+        const lockoutEnd = new Date(lockoutEndStr).getTime();
+        const now = new Date().getTime();
+
+        if (now < lockoutEnd) {
+            const remainingSeconds = Math.ceil((lockoutEnd - now) / 1000);
+            return { isLocked: true, remainingSeconds };
+        } else {
+            // Lockout expired, clear it but KEEP attempts to punish immediate subsequent failure?
+            // Strategy: Clear timestamp, but don't reset attempts until successful login? 
+            // Better Strategy: Users often make typos. If they wait 5 mins, let them try again fresh-ish.
+            // But to prevent rapid 5 min cycles, we won't reset attempts here. 
+            // Just clear the blocking timestamp.
+            await SecureStore.deleteItemAsync(LOCKOUT_TIMESTAMP_KEY);
+            return { isLocked: false, remainingSeconds: 0 };
+        }
+    } catch (error) {
+        console.error('Error checking lockout:', error);
+        return { isLocked: false, remainingSeconds: 0 };
+    }
+};
+
+/**
+ * Records a failed PIN attempt and implements exponential backoff
+ * @returns {Promise<{locked: boolean, minutes?: number}>}
+ */
+export const recordFailedAttempt = async () => {
+    try {
+        const attemptsStr = await SecureStore.getItemAsync(LOCKOUT_ATTEMPTS_KEY);
+        let attempts = attemptsStr ? parseInt(attemptsStr, 10) : 0;
+        attempts += 1;
+        await SecureStore.setItemAsync(LOCKOUT_ATTEMPTS_KEY, attempts.toString());
+
+        let lockoutMinutes = 0;
+
+        if (attempts >= 10) {
+            lockoutMinutes = 240; // 4 hours
+        } else if (attempts >= 6) {
+            lockoutMinutes = 15; // 15 mins
+        } else if (attempts >= 3) {
+            lockoutMinutes = 5; // 5 mins
+        }
+
+        if (lockoutMinutes > 0) {
+            const lockoutEnd = new Date();
+            lockoutEnd.setMinutes(lockoutEnd.getMinutes() + lockoutMinutes);
+            await SecureStore.setItemAsync(LOCKOUT_TIMESTAMP_KEY, lockoutEnd.toISOString());
+            return { locked: true, minutes: lockoutMinutes };
+        }
+
+        return { locked: false };
+    } catch (error) {
+        console.error('Error recording failed attempt:', error);
+        return { locked: false };
+    }
+};
+
+/**
+ * Resets failed attempts after successful login
+ */
+export const resetFailedAttempts = async () => {
+    try {
+        await SecureStore.deleteItemAsync(LOCKOUT_ATTEMPTS_KEY);
+        await SecureStore.deleteItemAsync(LOCKOUT_TIMESTAMP_KEY);
+    } catch (error) {
+        console.error('Error resetting attempts:', error);
     }
 };
 

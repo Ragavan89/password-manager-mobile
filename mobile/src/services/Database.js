@@ -64,6 +64,12 @@ export const initDatabase = () => {
 };
 
 export const addPassword = (siteName, username, encryptedPassword, comments = '', cloudSynced = 1, id = null) => {
+  const { isPanicMode } = require('./Encryption');
+  if (isPanicMode()) {
+    console.warn("🚨 PANIC MODE: Write operation blocked.");
+    return { id: null, error: "Cannot save in Panic Mode" };
+  }
+
   const lastModified = new Date().toISOString();
   // Generate UUID if not provided
   const newId = id || Crypto.randomUUID();
@@ -113,7 +119,7 @@ export const addPasswordsBatch = (passwords) => {
     db.withTransactionSync(() => {
       for (const p of passwords) {
         db.runSync(
-          'INSERT INTO passwords (id, siteName, username, encryptedPassword, lastModified, comments, cloudSynced) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          'INSERT OR REPLACE INTO passwords (id, siteName, username, encryptedPassword, lastModified, comments, cloudSynced) VALUES (?, ?, ?, ?, ?, ?, ?)',
           p.id || Crypto.randomUUID(),
           p.siteName,
           p.username,
@@ -131,13 +137,25 @@ export const addPasswordsBatch = (passwords) => {
   }
 };
 
+// Import at the top will be needed: import { isPanicMode } from './Encryption';
+
 export const getPasswords = () => {
+  // Check Panic Mode dynamically to avoid circular dependency
+  const { isPanicMode } = require('./Encryption');
+
+  if (isPanicMode && isPanicMode()) {
+    console.log("🚨 PANIC MODE ACTIVE: Returning empty vault.");
+    return [];
+  }
+
   if (Platform.OS === 'web') {
     const all = JSON.parse(localStorage.getItem('passwords') || '[]');
     return all.filter(p => !p.isDeleted);
   }
   return db.getAllSync('SELECT * FROM passwords WHERE isDeleted = 0 OR isDeleted IS NULL');
 };
+
+
 
 export const updatePassword = (id, siteName, username, encryptedPassword, comments = '') => {
   const lastModified = new Date().toISOString();
