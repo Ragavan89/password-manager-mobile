@@ -526,6 +526,19 @@ export default function SettingsScreen({ navigation }) {
                     )
                 }
 
+                {/* Help & Support Section */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>❓ Help & Support</Text>
+                    <View style={styles.card}>
+                        <TouchableOpacity
+                            style={styles.secondaryButton}
+                            onPress={() => navigation.navigate('FAQ')}
+                        >
+                            <Text style={styles.secondaryButtonText}>📝 Frequently Asked Questions</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
                 {/* Legal Section */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>⚖️ Legal</Text>
