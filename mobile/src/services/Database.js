@@ -88,6 +88,49 @@ export const addPassword = (siteName, username, encryptedPassword, comments = ''
   return { id: newId, lastModified };
 };
 
+export const addPasswordsBatch = (passwords) => {
+  if (!passwords || passwords.length === 0) return { success: true, count: 0 };
+  const defaultLastModified = new Date().toISOString();
+
+  if (Platform.OS === 'web') {
+    const existing = JSON.parse(localStorage.getItem('passwords') || '[]');
+    const newEntries = passwords.map(p => ({
+      id: p.id || Crypto.randomUUID(),
+      siteName: p.siteName,
+      username: p.username,
+      encryptedPassword: p.encryptedPassword,
+      lastModified: p.lastModified || defaultLastModified,
+      comments: p.comments || '',
+      cloudSynced: p.cloudSynced !== undefined ? p.cloudSynced : 1,
+      isDeleted: 0
+    }));
+    localStorage.setItem('passwords', JSON.stringify([...existing, ...newEntries]));
+    return { success: true, count: newEntries.length };
+  }
+
+  // Use synchronous transaction for massive speedup
+  try {
+    db.withTransactionSync(() => {
+      for (const p of passwords) {
+        db.runSync(
+          'INSERT INTO passwords (id, siteName, username, encryptedPassword, lastModified, comments, cloudSynced) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          p.id || Crypto.randomUUID(),
+          p.siteName,
+          p.username,
+          p.encryptedPassword,
+          p.lastModified || defaultLastModified,
+          p.comments || '',
+          p.cloudSynced !== undefined ? p.cloudSynced : 1
+        );
+      }
+    });
+    return { success: true, count: passwords.length };
+  } catch (error) {
+    console.error('Batch insert error:', error);
+    throw error;
+  }
+};
+
 export const getPasswords = () => {
   if (Platform.OS === 'web') {
     const all = JSON.parse(localStorage.getItem('passwords') || '[]');

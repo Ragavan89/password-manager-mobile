@@ -401,6 +401,24 @@ export const reEncryptAllPasswords = async (userId) => {
         console.log(`🔍 DEBUG: Old Salt (prefix): ${oldSalt.substring(0, 6)}...`);
         console.log(`🔍 DEBUG: New Salt (prefix): ${newSalt.substring(0, 6)}...`);
 
+        // OPTIMIZATION: Derive keys once outside the loop (O(1)) instead of for every password (O(N))
+        // Try to reuse cached key (Old Salt) to skip derivation
+        let oldDerivedKey = await SecureStore.getItemAsync(ENCRYPTION_KEY_KEY);
+        if (oldDerivedKey) {
+            console.log('⚡ Using cached encryption key for decryption (saved ~2s CPU time)');
+        } else {
+            console.log('⚠️ Cached key missing, performing PBKDF2 derivation...');
+            oldDerivedKey = CryptoJS.PBKDF2(masterPassword, oldSalt, {
+                keySize: 256 / 32,
+                iterations: ENCRYPTION_CONFIG.KEY_DERIVATION_ITERATIONS
+            }).toString();
+        }
+
+        const newDerivedKey = CryptoJS.PBKDF2(masterPassword, newSalt, {
+            keySize: 256 / 32,
+            iterations: ENCRYPTION_CONFIG.KEY_DERIVATION_ITERATIONS
+        }).toString();
+
         // Get all local passwords
         const localPasswords = Database.getPasswords();
         let reEncryptedCount = 0;
@@ -409,53 +427,33 @@ export const reEncryptAllPasswords = async (userId) => {
         // Re-encrypt each password
         for (const passwordEntry of localPasswords) {
             try {
-                // Skip if already synced to cloud (cloud entries use cloud salt)
-                // Only re-encrypt local-only entries (not synced yet)
-                // cloudSynced can be 1 (synced), 0 (not synced), or undefined/null (legacy)
-
-                // CRITICAL FIX: Even synced passwords might be encrypted with the WRONG local salt
-                // if we are in a Split-Brain scenario. We must try to decrypt everything with
-                // the old salt and migrate it if successful.
-
-                /* 
-                if (passwordEntry.cloudSynced === 1) {
-                    continue;
+                // Decrypt with old key (fast AES)
+                let decryptedPassword = '';
+                try {
+                    const bytes = CryptoJS.AES.decrypt(passwordEntry.encryptedPassword, oldDerivedKey);
+                    decryptedPassword = bytes.toString(CryptoJS.enc.Utf8);
+                } catch (e) {
+                    // Decryption failed
                 }
-                */
 
-                // Decrypt with old salt
-                const decryptedPassword = decryptWithSalt(
-                    passwordEntry.encryptedPassword,
-                    masterPassword,
-                    oldSalt
-                );
+                // If decryption failed, try with new key (might already be migrated)
+                if (!decryptedPassword) {
+                    try {
+                        const bytes = CryptoJS.AES.decrypt(passwordEntry.encryptedPassword, newDerivedKey);
+                        const testDecrypt = bytes.toString(CryptoJS.enc.Utf8);
+                        if (testDecrypt) {
+                            // Already encrypted with new key
+                            continue;
+                        }
+                    } catch (e) { }
 
-                // If decryption failed, try with new salt (might already be encrypted with new salt)
-                if (decryptedPassword === passwordEntry.encryptedPassword) {
-                    // Try with new salt
-                    const testDecrypt = decryptWithSalt(
-                        passwordEntry.encryptedPassword,
-                        masterPassword,
-                        newSalt
-                    );
-
-                    if (testDecrypt !== passwordEntry.encryptedPassword) {
-                        // Already encrypted with new salt, skip
-                        continue;
-                    }
-
-                    // Can't decrypt with either salt - might be legacy or corrupted
-                    console.warn(`⚠️ Could not decrypt password ${passwordEntry.id}, skipping`);
+                    // If still nothing, skip
                     failedCount++;
                     continue;
                 }
 
-                // Encrypt with new salt
-                const reEncryptedPassword = encryptWithSalt(
-                    decryptedPassword,
-                    masterPassword,
-                    newSalt
-                );
+                // Encrypt with new key (fast AES)
+                const reEncryptedPassword = CryptoJS.AES.encrypt(decryptedPassword, newDerivedKey).toString();
 
                 if (!reEncryptedPassword) {
                     console.warn(`⚠️ Failed to re-encrypt password ${passwordEntry.id}`);
@@ -482,11 +480,7 @@ export const reEncryptAllPasswords = async (userId) => {
         // Clear migration flags
         await clearSaltMigrationFlags(userId);
 
-        // Update cached encryption key with new salt
-        const newDerivedKey = CryptoJS.PBKDF2(masterPassword, newSalt, {
-            keySize: 256 / 32,
-            iterations: ENCRYPTION_CONFIG.KEY_DERIVATION_ITERATIONS
-        }).toString();
+        // Update cached encryption key with new salt (already derived!)
         await SecureStore.setItemAsync(ENCRYPTION_KEY_KEY, newDerivedKey);
 
         console.log(`✅ Re-encryption complete: ${reEncryptedCount} passwords re-encrypted, ${failedCount} failed`);

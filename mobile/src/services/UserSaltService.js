@@ -564,9 +564,10 @@ export const verifySaltIntegrity = async (userId, forceCheck = false) => {
                     // Also update legacy local salt key to match so future checks pass
                     await SecureStore.setItemAsync('userSalt_local', cloudSalt);
 
-                    // CRITICAL: Clear cached encryption key to force re-derivation with new salt
-                    // This prevents the key/salt mismatch that causes decryption failures
-                    await clearEncryptionKeyCache();
+                    // CRITICAL: We do NOT clear the cache here anymore.
+                    // We need the old cached key to decrypt local passwords efficiently in reEncryptAllPasswords.
+                    // The cache will be updated with the new key after re-encryption is complete.
+                    // await clearEncryptionKeyCache();
 
                     // Stop verification loop for this session
                     lastSaltVerificationTime = Date.now();

@@ -555,7 +555,7 @@ export const syncBidirectional = async () => {
 
     // Mark as syncing and create the sync promise
     isSyncing = true;
-    const SYNC_OVERALL_TIMEOUT = 30000; // 30 seconds total
+    const SYNC_OVERALL_TIMEOUT = 60000; // 60 seconds total
 
     const syncOperation = Promise.race([
         (async () => {
@@ -797,20 +797,23 @@ export const syncBidirectional = async () => {
                     uploadSkipped = true;
                 }
                 // OPTIMIZATION 2: Execute local operations synchronously (fast)
-                // Download new passwords
-                for (const cloudPwd of toDownload) {
+                // Download new passwords (BATCH OPTIMIZED)
+                if (toDownload.length > 0) {
                     try {
-                        // Use the UUID from cloud
-                        const { id } = Database.addPassword(
-                            cloudPwd.siteName || 'Untitled',
-                            cloudPwd.username || '',
-                            cloudPwd.encryptedPassword || '',
-                            cloudPwd.comments || '',
-                            1, // Mark as synced
-                            cloudPwd.id // Pass the UUID
-                        );
+                        const batchData = toDownload.map(cloudPwd => ({
+                            id: cloudPwd.id, // Use UUID from cloud
+                            siteName: cloudPwd.siteName || 'Untitled',
+                            username: cloudPwd.username || '',
+                            encryptedPassword: cloudPwd.encryptedPassword || '',
+                            comments: cloudPwd.comments || '',
+                            lastModified: cloudPwd.lastModified || cloudPwd.lastUpdated || cloudPwd.updatedAt, // Preserve timestamp
+                            cloudSynced: 1 // Mark as synced
+                        }));
+
+                        Database.addPasswordsBatch(batchData);
+                        console.log(`✅ Batch downloaded ${toDownload.length} passwords`);
                     } catch (err) {
-                        console.error(`❌ Error downloading ${cloudPwd.siteName}:`, err);
+                        console.error('❌ Error during batch download:', err);
                     }
                 }
 

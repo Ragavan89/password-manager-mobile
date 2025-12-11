@@ -13,7 +13,7 @@
  */
 
 import React, { useState, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView, TouchableWithoutFeedback } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { setupPIN } from '../services/Encryption';
@@ -124,30 +124,41 @@ export default function SetupPINScreen({ navigation }) {
                     <View style={styles.form}>
                         {/* PIN Input Container with Overlay */}
                         <View style={styles.pinInputWrapper}>
-                            {/* PIN Digit Boxes */}
-                            <View style={styles.pinContainer}>
-                                {[0, 1, 2, 3].map((index) => (
-                                    <View
-                                        key={index}
-                                        style={[
-                                            styles.pinBox,
-                                            {
-                                                width: isTablet ? scale(70) : scale(60),
-                                                height: isTablet ? scale(80) : scale(70),
-                                            }
-                                        ]}
-                                    >
-                                        <Text style={[styles.pinDot, { fontSize: responsiveFontSize(40) }]}>
-                                            {currentPin.length > index ? '●' : ''}
-                                        </Text>
-                                    </View>
-                                ))}
-                            </View>
+                            <TouchableWithoutFeedback onPress={() => {
+                                // Force blur first if already focused but keyboard is hidden
+                                if (pinInputRef.current?.isFocused()) {
+                                    pinInputRef.current.blur();
+                                }
+                                // Small delay to ensure the blur completes and keyboard state resets
+                                setTimeout(() => {
+                                    pinInputRef.current?.focus();
+                                }, 50);
+                            }}>
+                                {/* PIN Digit Boxes */}
+                                <View style={styles.pinContainer}>
+                                    {[0, 1, 2, 3].map((index) => (
+                                        <View
+                                            key={index}
+                                            style={[
+                                                styles.pinBox,
+                                                {
+                                                    width: isTablet ? scale(70) : scale(60),
+                                                    height: isTablet ? scale(80) : scale(70),
+                                                }
+                                            ]}
+                                        >
+                                            <Text style={[styles.pinDot, { fontSize: responsiveFontSize(40) }]}>
+                                                {currentPin.length > index ? '●' : ''}
+                                            </Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            </TouchableWithoutFeedback>
 
-                            {/* Transparent overlay input */}
+                            {/* Hidden input */}
                             <TextInput
                                 ref={pinInputRef}
-                                style={styles.overlayInput}
+                                style={styles.hiddenInput}
                                 value={currentPin}
                                 onChangeText={setCurrentPin}
                                 keyboardType="numeric"
@@ -278,14 +289,11 @@ const styles = StyleSheet.create({
         color: theme.colors.primary,
         fontWeight: theme.fonts.weights.bold,
     },
-    overlayInput: {
+    hiddenInput: {
         position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
+        width: 1,
+        height: 1,
         opacity: 0,
-        fontSize: 1,
     },
     button: {
         backgroundColor: theme.colors.primary,

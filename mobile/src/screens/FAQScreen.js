@@ -58,24 +58,28 @@ export default function FAQScreen() {
             answer: "Yes, absolutely. Your passwords are encrypted using AES-256 encryption. We do not store your Master Password or PIN on our servers, which means only you have access to your decrypted data."
         },
         {
-            question: "What if I forget my Master Password?",
-            answer: "Because we do not store your Master Password, we cannot recover it for you. If you forget your Master Password, you will unfortunately lose access to your encrypted data. Please keep your Master Password safe!"
+            question: "Can I use the app offline?",
+            answer: "Yes! CredVault is designed to be offline-first. You can add, edit, and view your passwords without an internet connection. Syncing will occur automatically when you're back online if you have Cloud Sync enabled."
         },
         {
             question: "How does Cloud Sync work?",
             answer: "Cloud Sync is an optional feature that allows you to securely backup your encrypted passwords to the cloud. Even when stored in the cloud, your data remains fully encrypted and can only be unlocked by you on your devices."
         },
         {
-            question: "Can I use the app offline?",
-            answer: "Yes! CredVault is designed to be offline-first. You can add, edit, and view your passwords without an internet connection. Syncing will occur automatically when you're back online if you have Cloud Sync enabled."
+            question: "What if I forget my Master Password?",
+            answer: "Because we do not store your Master Password, we cannot recover it for you. If you forget your Master Password, you will unfortunately lose access to your encrypted data. Please keep your Master Password safe!"
+        },
+        {
+            question: "Can I change my Master Password?",
+            answer: "For security reasons, the Master Password cannot be changed once set. However, you can view your current Master Password in the Settings menu (requires PIN) if you need to set up the app on a new device."
         },
         {
             question: "How do I change my PIN?",
-            answer: "You cannot directly change your PIN currently, but you can change your Master Password or reset the app if needed from the Settings menu. (Future updates may include direct PIN change functionality)."
+            answer: "If you forget your PIN or want to change it, you can reset it from the Login screen. Tap 'Forgot PIN?' and follow the instructions to verify your identity using your device biometrics (fingerprint/face) or device passcode. Once verified, you can set a new PIN."
         },
         {
-            question: "Is CredVault free?",
-            answer: "Yes, CredVault offers a free tier that allows you to store a generous number of passwords. We also offer premium tiers for power users who need more storage."
+            question: "How can I contact support?",
+            answer: "For any inquiries, bug reports, or feedback, please reach out to our team at veni.innovations@gmail.com. We are happy to help!"
         }
     ];
 
@@ -103,11 +107,7 @@ export default function FAQScreen() {
                     />
                 ))}
 
-                <View style={styles.footerContainer}>
-                    <Text style={styles.footerText}>
-                        Still have questions? Contact us at support@credvault.com
-                    </Text>
-                </View>
+
             </ScrollView>
         </View>
     );
@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.neutral.white,
     },
     questionText: {
-        fontSize: FontSizes.medium,
+        fontSize: FontSizes.large,
         fontWeight: FontWeights.semibold,
         color: Colors.text.primary,
         flex: 1,
@@ -171,9 +171,9 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.neutral.white,
     },
     answerText: {
-        fontSize: FontSizes.small,
+        fontSize: FontSizes.regular,
         color: Colors.text.secondary,
-        lineHeight: 22,
+        lineHeight: 24,
     },
     footerContainer: {
         marginTop: 20,

@@ -337,7 +337,7 @@ export default function HomeScreen({ navigation }) {
         return (
             <View style={[styles.card, isUnsynced && styles.unsyncedCard, isTablet && styles.cardTablet]}>
                 <TouchableOpacity
-                    style={styles.cardHeader}
+                    style={[styles.cardHeader, isExpanded && { marginBottom: 15 }]}
                     onPress={() => toggleExpand(item.id)}
                     activeOpacity={0.7}
                 >
@@ -346,9 +346,7 @@ export default function HomeScreen({ navigation }) {
                     </View>
                     <View style={styles.headerText}>
                         <Text style={[styles.siteName, { fontSize: responsiveFontSize(18) }]}>{item.siteName}</Text>
-                        {!isExpanded && (
-                            <Text style={[styles.username, { fontSize: responsiveFontSize(14) }]}>{item.username}</Text>
-                        )}
+
                     </View>
                     {isUnsynced && (
                         <View style={styles.unsyncedBadge}>
@@ -566,8 +564,8 @@ const styles = StyleSheet.create({
     card: {
         backgroundColor: Colors.neutral.white,
         borderRadius: 16,
-        marginBottom: 20,
-        padding: 20,
+        marginBottom: 12,
+        padding: 14,
         shadowColor: Colors.shadow.card,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.08,
@@ -604,12 +602,11 @@ const styles = StyleSheet.create({
     cardHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 15,
     },
     iconContainer: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         backgroundColor: Colors.primary.solid,
         justifyContent: 'center',
         alignItems: 'center',
