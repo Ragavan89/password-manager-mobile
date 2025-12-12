@@ -163,22 +163,6 @@ export default function HomeScreen({ navigation }) {
         navigation.setOptions({
             headerRight: () => (
                 <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: 5 }}>
-                    {/* Add New Button - Icon Only */}
-                    <TouchableOpacity
-                        onPress={() => navigation.navigate('AddPassword')}
-                        style={{
-                            marginHorizontal: 6,
-                            width: 36,
-                            height: 36,
-                            borderRadius: 18,
-                            backgroundColor: '#d3f9d8',
-                            justifyContent: 'center',
-                            alignItems: 'center'
-                        }}
-                    >
-                        <Text style={{ fontSize: 20 }}>➕</Text>
-                    </TouchableOpacity>
-
                     {/* Settings Button - Icon Only */}
                     <TouchableOpacity
                         onPress={() => navigation.navigate('Settings')}
@@ -624,39 +608,52 @@ export default function HomeScreen({ navigation }) {
 
             {/* Tab Content */}
             {activeTab === 'passwords' ? (
-                <FlatList
-                    data={passwordItems}
-                    keyExtractor={(item) => item.id ? item.id.toString() : Math.random().toString()}
-                    renderItem={renderItem}
-                    numColumns={isTablet ? 2 : 1}
-                    columnWrapperStyle={isTablet ? styles.row : null}
-                    contentContainerStyle={[
-                        styles.listContent,
-                        { paddingBottom: 120 + insets.bottom },
-                        isTablet && styles.listContentTablet
-                    ]}
-                    refreshControl={
-                        <RefreshControl refreshing={false} onRefresh={handleRefresh} />
-                    }
-                    ListEmptyComponent={
-                        <View style={styles.emptyState}>
-                            {searchQuery.length > 0 ? (
-                                <>
-                                    <Text style={[styles.emptyText, { fontSize: responsiveFontSize(18) }]}>No passwords found</Text>
-                                    <Text style={[styles.emptySubText, { fontSize: responsiveFontSize(14) }]}>Try a different search term</Text>
-                                    <TouchableOpacity onPress={clearSearch} style={styles.clearSearchButton}>
-                                        <Text style={styles.clearSearchButtonText}>Clear Search</Text>
-                                    </TouchableOpacity>
-                                </>
-                            ) : (
-                                <>
-                                    <Text style={[styles.emptyText, { fontSize: responsiveFontSize(18) }]}>No passwords found.</Text>
-                                    <Text style={[styles.emptySubText, { fontSize: responsiveFontSize(14) }]}>Tap "Add New" in the header to add one.</Text>
-                                </>
-                            )}
-                        </View>
-                    }
-                />
+                <>
+                    {/* Passwords Header - Similar to Wallet */}
+                    <View style={styles.walletHeaderContainer}>
+                        <Text style={styles.walletTitle}>My Passwords</Text>
+                        <TouchableOpacity
+                            style={styles.addCardButton}
+                            onPress={() => navigation.navigate('AddPassword')}
+                        >
+                            <Text style={styles.addCardButtonText}>+ Add Password</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <FlatList
+                        data={passwordItems}
+                        keyExtractor={(item) => item.id ? item.id.toString() : Math.random().toString()}
+                        renderItem={renderItem}
+                        numColumns={isTablet ? 2 : 1}
+                        columnWrapperStyle={isTablet ? styles.row : null}
+                        contentContainerStyle={[
+                            styles.listContent,
+                            { paddingBottom: 120 + insets.bottom },
+                            isTablet && styles.listContentTablet
+                        ]}
+                        refreshControl={
+                            <RefreshControl refreshing={false} onRefresh={handleRefresh} />
+                        }
+                        ListEmptyComponent={
+                            <View style={styles.emptyState}>
+                                {searchQuery.length > 0 ? (
+                                    <>
+                                        <Text style={[styles.emptyText, { fontSize: responsiveFontSize(18) }]}>No passwords found</Text>
+                                        <Text style={[styles.emptySubText, { fontSize: responsiveFontSize(14) }]}>Try a different search term</Text>
+                                        <TouchableOpacity onPress={clearSearch} style={styles.clearSearchButton}>
+                                            <Text style={styles.clearSearchButtonText}>Clear Search</Text>
+                                        </TouchableOpacity>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Text style={[styles.emptyText, { fontSize: responsiveFontSize(18) }]}>No passwords found.</Text>
+                                        <Text style={[styles.emptySubText, { fontSize: responsiveFontSize(14) }]}>Tap "+ Add Password" above to add one.</Text>
+                                    </>
+                                )}
+                            </View>
+                        }
+                    />
+                </>
             ) : (
                 /* Wallet Tab Content */
                 <View style={styles.walletTabContainer}>
@@ -682,6 +679,8 @@ export default function HomeScreen({ navigation }) {
                                         // Ignore parse error
                                     }
 
+                                    const isUnsynced = cloudSyncEnabled && item.cloudSynced === 0;
+
                                     return (
                                         <TouchableOpacity
                                             activeOpacity={0.9}
@@ -695,6 +694,7 @@ export default function HomeScreen({ navigation }) {
                                                 last4={meta.last4 || '••••'}
                                                 color1={meta.color1 || '#343a40'}
                                                 color2={meta.color2 || '#868e96'}
+                                                isUnsynced={isUnsynced}
                                             />
                                         </TouchableOpacity>
                                     );
@@ -1202,5 +1202,35 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#e67700',
         fontWeight: '600',
+    },
+    walletTabContainer: {
+        flex: 1,
+    },
+    walletHeaderContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingTop: 15,
+        paddingBottom: 10,
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#e9ecef',
+    },
+    walletTitle: {
+        fontSize: FontSizes.h3,
+        fontWeight: FontWeights.bold,
+        color: Colors.text.primary,
+    },
+    addCardButton: {
+        backgroundColor: Colors.primary.solid,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+    },
+    addCardButtonText: {
+        color: '#fff',
+        fontSize: FontSizes.small,
+        fontWeight: FontWeights.semibold,
     },
 });

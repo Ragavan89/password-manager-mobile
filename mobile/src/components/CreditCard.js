@@ -1,12 +1,21 @@
 import React from 'react';
 import { View, Text, StyleSheet, Dimensions, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useResponsiveDimensions } from '../utils/DimensionsHelper';
 import { FontSizes, FontWeights } from '../theme/typography';
 
 const CARD_ASPECT_RATIO = 1.586; // Standard credit card aspect ratio
 
-export default function CreditCard({ type = 'visa', holderName = 'YOUR NAME', last4 = '0000', bankName = 'Bank', color1 = '#4c6ef5', color2 = '#15aabf' }) {
+export default function CreditCard({
+    type = 'visa',
+    holderName = 'YOUR NAME',
+    last4 = '0000',
+    bankName = 'Bank',
+    color1 = '#4c6ef5',
+    color2 = '#15aabf',
+    isUnsynced = false  // New prop for sync status
+}) {
     const { width } = Dimensions.get('window');
     const { isTablet, responsiveFontSize } = useResponsiveDimensions();
 
@@ -41,6 +50,14 @@ export default function CreditCard({ type = 'visa', holderName = 'YOUR NAME', la
                     end={{ x: 0.3, y: 0.8 }}
                     style={StyleSheet.absoluteFill}
                 />
+
+                {/* Unsynced Badge - Top Right Corner */}
+                {isUnsynced && (
+                    <View style={styles.unsyncedBadge}>
+                        <Ionicons name="cloud-offline-outline" size={14} color="#e67700" />
+                        <Text style={styles.unsyncedText}>Not Synced</Text>
+                    </View>
+                )}
 
                 {/* Content */}
                 <View style={styles.cardContent}>
@@ -184,5 +201,29 @@ const styles = StyleSheet.create({
         borderRadius: 125,
         backgroundColor: 'rgba(0,0,0,0.05)',
         zIndex: 1,
-    }
+    },
+    unsyncedBadge: {
+        position: 'absolute',
+        top: 12,
+        left: 12,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        zIndex: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
+        elevation: 3,
+    },
+    unsyncedText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: '#e67700',
+        letterSpacing: 0.3,
+    },
 });

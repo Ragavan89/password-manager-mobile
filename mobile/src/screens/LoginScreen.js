@@ -325,21 +325,15 @@ export default function LoginScreen({ navigation }) {
                         Unlock Vault
                     </GradientButton>
 
-                    {/* Forgot PIN Link */}
+                    {/* Forgot PIN Link - Simple and Subtle */}
                     <TouchableOpacity
                         style={styles.forgotPinContainer}
                         onPress={handleForgotPin}
-                        activeOpacity={0.8}
+                        activeOpacity={0.6}
                     >
-                        <Ionicons name="help-circle-outline" size={20} color={Colors.primary.solid} />
-                        <View style={styles.forgotPinTextContainer}>
-                            <Text style={styles.forgotPinText}>Forgot PIN?</Text>
-                            <Text style={styles.forgotPinSubtext}>
-                                {biometricAvailable
-                                    ? 'Reset using your device unlock'
-                                    : 'Reset using device authentication'}
-                            </Text>
-                        </View>
+                        <Text style={styles.forgotPinText}>
+                            Forgot PIN? <Text style={styles.forgotPinLink}>Reset it</Text>
+                        </Text>
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
@@ -537,29 +531,19 @@ const styles = StyleSheet.create({
     },
     forgotPinContainer: {
         marginTop: 24,
-        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 16,
-        backgroundColor: Colors.neutral.gray50,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: Colors.border.light,
-        gap: 12,
-    },
-    forgotPinTextContainer: {
-        alignItems: 'flex-start',
+        paddingVertical: 12,
     },
     forgotPinText: {
-        fontSize: FontSizes.medium,
+        fontSize: FontSizes.small,
+        color: Colors.text.tertiary,
+        textAlign: 'center',
+    },
+    forgotPinLink: {
         color: Colors.primary.solid,
         fontWeight: FontWeights.semibold,
-        marginBottom: 4,
-    },
-    forgotPinSubtext: {
-        fontSize: FontSizes.tiny,
-        color: Colors.text.secondary,
-        textAlign: 'center',
+        textDecorationLine: 'underline',
     },
     modalOverlay: {
         flex: 1,

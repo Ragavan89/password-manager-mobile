@@ -169,11 +169,118 @@ export default function AddCardScreen({ navigation, route }) {
             }
 
             // 4. Handle Result
-            if (result.synced || result.isOffline || result.success) {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                setShowSuccessAnimation(true);
+            if (isEditMode) {
+                // EDIT MODE - Card Updated
+                if (result.synced) {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Card Updated!',
+                        message: 'Your card has been updated and synced to the cloud.',
+                        type: 'success',
+                        buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
+                    });
+                } else if (result.isOffline) {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                    // Check if cloud sync is enabled
+                    const cloudSyncEnabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
+                    const user = getCurrentUser();
+                    const isCloudSyncActive = cloudSyncEnabled === 'true' && user !== null;
+
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Updated Locally',
+                        message: isCloudSyncActive
+                            ? 'Your card has been updated on this device.\n\nIt is currently stored locally since the device doesn\'t have internet access. It will be synced when connection is available.'
+                            : 'Your card has been updated on this device.\n\nIt is stored offline only and will not be synced to the cloud. To enable cloud sync, please go to settings and sign in.',
+                        type: 'info',
+                        buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }],
+                        textAlign: 'left'
+                    });
+                } else if (result.limitReached) {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Updated Locally Only',
+                        message: 'Your card has been updated on this device.\n\nHowever, it could not be synced to the cloud because you have reached your storage limit.\n\nTo enable cloud sync, please delete some passwords or cards.',
+                        type: 'warning',
+                        buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }],
+                        textAlign: 'left'
+                    });
+                } else {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                    // Check if cloud sync is enabled
+                    const cloudSyncEnabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
+                    const user = getCurrentUser();
+                    const isCloudSyncActive = cloudSyncEnabled === 'true' && user !== null;
+
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Updated Locally',
+                        message: isCloudSyncActive
+                            ? 'Your card has been updated on this device.\n\nIt is currently stored offline and will be synced when connection is available.'
+                            : 'Your card has been updated on this device.\n\nIt is stored offline only and will not be synced to the cloud. To enable cloud sync, please go to settings and sign in.',
+                        type: 'info',
+                        buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }],
+                        textAlign: 'left'
+                    });
+                }
             } else {
-                throw new Error("Save failed");
+                // CREATE MODE - New Card Saved
+                if (result.isOffline) {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                    // Check if cloud sync is enabled
+                    const cloudSyncEnabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
+                    const user = getCurrentUser();
+                    const isCloudSyncActive = cloudSyncEnabled === 'true' && user !== null;
+
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Saved Locally',
+                        message: isCloudSyncActive
+                            ? 'Your card has been saved securely on this device.\n\nIt is currently stored locally since the device doesn\'t have internet access. It will be synced when connection is available.'
+                            : 'Your card has been saved securely on this device.\n\nIt is stored offline only and will not be synced to the cloud. To enable cloud sync, please go to settings and sign in.',
+                        type: 'info',
+                        buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }],
+                        textAlign: 'left'
+                    });
+                } else if (result.warning) {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Saved Locally Only',
+                        message: 'Your card has been saved securely on this device.\n\nHowever, it could not be synced to the cloud because you have reached your storage limit.\n\nTo enable cloud sync, please delete some passwords or cards.',
+                        type: 'warning',
+                        buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }],
+                        textAlign: 'left'
+                    });
+                } else if (result.synced) {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Card Saved!',
+                        message: 'Your card has been saved securely on this device and synced to the cloud.',
+                        type: 'success',
+                        buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
+                    });
+                } else {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                    // Check if cloud sync is enabled
+                    const cloudSyncEnabled = await SecureStore.getItemAsync('CLOUD_SYNC_ENABLED');
+                    const user = getCurrentUser();
+                    const isCloudSyncActive = cloudSyncEnabled === 'true' && user !== null;
+
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Saved Locally',
+                        message: isCloudSyncActive
+                            ? 'Your card has been saved securely on this device.\n\nIt is currently stored offline and will be synced when connection is available.'
+                            : 'Your card has been saved securely on this device.\n\nIt is stored offline only and will not be synced to the cloud. To enable cloud sync, please go to settings and sign in.',
+                        type: 'info',
+                        buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }],
+                        textAlign: 'left'
+                    });
+                }
             }
 
         } catch (error) {
