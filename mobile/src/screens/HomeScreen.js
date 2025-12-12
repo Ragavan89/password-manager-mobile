@@ -29,6 +29,24 @@ import { useResponsiveDimensions, useFontSizes } from '../utils/DimensionsHelper
 import { Colors } from '../theme/colors';
 import { FontSizes, FontWeights } from '../theme/typography';
 import CreditCard from '../components/CreditCard';
+import { LinearGradient } from 'expo-linear-gradient';
+
+// Generate gradient colors based on first letter
+const getGradientFromLetter = (letter) => {
+    const gradients = {
+        'A': ['#667eea', '#764ba2'], 'B': ['#f093fb', '#f5576c'], 'C': ['#4facfe', '#00f2fe'],
+        'D': ['#43e97b', '#38f9d7'], 'E': ['#fa709a', '#fee140'], 'F': ['#30cfd0', '#330867'],
+        'G': ['#a8edea', '#fed6e3'], 'H': ['#ff9a9e', '#fecfef'], 'I': ['#ffecd2', '#fcb69f'],
+        'J': ['#ff6e7f', '#bfe9ff'], 'K': ['#e0c3fc', '#8ec5fc'], 'L': ['#f093fb', '#f5576c'],
+        'M': ['#4facfe', '#00f2fe'], 'N': ['#43e97b', '#38f9d7'], 'O': ['#fa709a', '#fee140'],
+        'P': ['#667eea', '#764ba2'], 'Q': ['#a8edea', '#fed6e3'], 'R': ['#ff9a9e', '#fad0c4'],
+        'S': ['#ffecd2', '#fcb69f'], 'T': ['#a1c4fd', '#c2e9fb'], 'U': ['#d299c2', '#fef9d7'],
+        'V': ['#f5f7fa', '#c3cfe2'], 'W': ['#e0c3fc', '#8ec5fc'], 'X': ['#ff6e7f', '#bfe9ff'],
+        'Y': ['#ffecd2', '#fcb69f'], 'Z': ['#a8edea', '#fed6e3']
+    };
+
+    return gradients[letter.toUpperCase()] || ['#6a11cb', '#2575fc'];
+};
 
 export default function HomeScreen({ navigation }) {
     const insets = useSafeAreaInsets();
@@ -331,120 +349,146 @@ export default function HomeScreen({ navigation }) {
     const renderItem = ({ item }) => {
         const displayPassword = decryptedPasswords[item.id];
         const isExpanded = expandedCards[item.id];
-        // Only show yellow 'Not Synced' highlight if:
-        // 1. Cloud sync is explicitly ENABLED by the user
-        // 2. The item itself has not been synced (cloudSynced === 0)
-        // If sync is disabled, everything is local-only by design, so no warning needed.
         const isUnsynced = cloudSyncEnabled && item.cloudSynced === 0;
 
+        // Get gradient colors based on first letter
+        const gradientColors = getGradientFromLetter(item.siteName.charAt(0));
+
         return (
-            <View style={[styles.card, isUnsynced && styles.unsyncedCard, isTablet && styles.cardTablet]}>
-                <TouchableOpacity
-                    style={[styles.cardHeader, isExpanded && { marginBottom: 15 }]}
-                    onPress={() => toggleExpand(item.id)}
-                    activeOpacity={0.7}
-                >
-                    <View style={styles.iconContainer}>
-                        <Text style={[styles.siteInitial, { fontSize: responsiveFontSize(24) }]}>{item.siteName.charAt(0).toUpperCase()}</Text>
-                    </View>
-                    <View style={styles.headerText}>
-                        <Text style={[styles.siteName, { fontSize: responsiveFontSize(18) }]}>{item.siteName}</Text>
+            <TouchableOpacity
+                activeOpacity={0.95}
+                onPress={() => toggleExpand(item.id)}
+            >
+                <View style={[styles.card, isUnsynced && styles.unsyncedCard, isTablet && styles.cardTablet]}>
+                    <View style={[styles.cardHeader, isExpanded && { marginBottom: 15 }]}>
+                        {/* Gradient Icon Container */}
+                        <LinearGradient
+                            colors={gradientColors}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.iconContainer}
+                        >
+                            <Text style={[styles.siteInitial, { fontSize: responsiveFontSize(24) }]}>
+                                {item.siteName.charAt(0).toUpperCase()}
+                            </Text>
+                        </LinearGradient>
 
-                    </View>
-                    {isUnsynced && (
-                        <View style={styles.unsyncedBadge}>
-                            <Text style={styles.unsyncedIcon}>☁️❌</Text>
+                        <View style={styles.headerText}>
+                            <Text style={[styles.siteName, { fontSize: responsiveFontSize(18) }]} numberOfLines={1}>
+                                {item.siteName}
+                            </Text>
                         </View>
-                    )}
-                    <TouchableOpacity
-                        onPress={(e) => {
-                            e.stopPropagation();
-                            navigation.navigate('AddPassword', { item });
-                        }}
-                        style={styles.editButton}
-                    >
-                        <Text style={styles.editIcon}>✏️</Text>
-                    </TouchableOpacity>
-                    <View style={styles.expandButton}>
-                        <Text style={styles.expandIcon}>{isExpanded ? '▲' : '▼'}</Text>
-                    </View>
-                </TouchableOpacity>
 
-                {isExpanded && (
-                    <>
-                        <View style={styles.divider} />
-
-                        <View style={styles.cardBody}>
-                            <View style={styles.fieldRow}>
-                                <View style={styles.fieldContainer}>
-                                    <Text style={[styles.label, { fontSize: responsiveFontSize(10) }]}>USERNAME</Text>
-                                    <Text style={[styles.value, { fontSize: responsiveFontSize(16) }]}>{item.username}</Text>
-                                </View>
-                                <TouchableOpacity onPress={() => copyToClipboard(item.username, 'Username')} style={styles.iconButton}>
-                                    <Text style={styles.iconText}>📋</Text>
-                                </TouchableOpacity>
+                        {isUnsynced && (
+                            <View style={styles.unsyncedBadge}>
+                                <Ionicons name="cloud-offline-outline" size={14} color="#e67700" />
                             </View>
+                        )}
 
+                        <TouchableOpacity
+                            onPress={(e) => {
+                                e.stopPropagation();
+                                navigation.navigate('AddPassword', { item });
+                            }}
+                            style={styles.editButton}
+                        >
+                            <Ionicons name="create-outline" size={18} color="#495057" />
+                        </TouchableOpacity>
+
+                        <View style={styles.expandButton}>
+                            <Ionicons
+                                name={isExpanded ? "chevron-up" : "chevron-down"}
+                                size={20}
+                                color="#495057"
+                            />
+                        </View>
+                    </View>
+
+                    {isExpanded && (
+                        <>
                             <View style={styles.divider} />
 
-                            <View style={styles.fieldRow}>
-                                <View style={styles.fieldContainer}>
-                                    <Text style={[styles.label, { fontSize: responsiveFontSize(10) }]}>PASSWORD</Text>
-                                    <Text style={[styles.password, { fontSize: responsiveFontSize(16) }]}>
-                                        {showPassword[item.id] ? (displayPassword || '••••••••••••') : '••••••••••••'}
-                                    </Text>
-                                </View>
-                                <View style={styles.actionsRow}>
-                                    <TouchableOpacity
-                                        onPress={() => toggleVisibility(item.id)}
-                                        style={styles.iconButton}
-                                        disabled={!displayPassword}
-                                    >
-                                        <Text style={styles.iconText}>{showPassword[item.id] ? '👁️‍🗨️' : '👁️'}</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        onPress={() => copyToClipboard(displayPassword || '', 'Password')}
-                                        style={styles.iconButton}
-                                        disabled={!displayPassword}
-                                    >
-                                        <Text style={styles.iconText}>📋</Text>
+                            <View style={styles.cardBody}>
+                                <View style={styles.fieldRow}>
+                                    <View style={styles.fieldContainer}>
+                                        <Text style={[styles.label, { fontSize: responsiveFontSize(10) }]}>USERNAME</Text>
+                                        <Text style={[styles.value, { fontSize: responsiveFontSize(16) }]}>{item.username}</Text>
+                                    </View>
+                                    <TouchableOpacity onPress={() => copyToClipboard(item.username, 'Username')} style={styles.iconButton}>
+                                        <Ionicons name="copy-outline" size={18} color="#495057" />
                                     </TouchableOpacity>
                                 </View>
+
+                                <View style={styles.divider} />
+
+                                <View style={styles.fieldRow}>
+                                    <View style={styles.fieldContainer}>
+                                        <Text style={[styles.label, { fontSize: responsiveFontSize(10) }]}>PASSWORD</Text>
+                                        <Text style={[styles.password, { fontSize: responsiveFontSize(16) }]}>
+                                            {showPassword[item.id] ? (displayPassword || '••••••••••••') : '••••••••••••'}
+                                        </Text>
+                                    </View>
+                                    <View style={styles.actionsRow}>
+                                        <TouchableOpacity
+                                            onPress={() => toggleVisibility(item.id)}
+                                            style={styles.iconButton}
+                                            disabled={!displayPassword}
+                                        >
+                                            <Ionicons
+                                                name={showPassword[item.id] ? "eye-off-outline" : "eye-outline"}
+                                                size={18}
+                                                color={displayPassword ? "#495057" : "#adb5bd"}
+                                            />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            onPress={() => copyToClipboard(displayPassword || '', 'Password')}
+                                            style={styles.iconButton}
+                                            disabled={!displayPassword}
+                                        >
+                                            <Ionicons
+                                                name="copy-outline"
+                                                size={18}
+                                                color={displayPassword ? "#495057" : "#adb5bd"}
+                                            />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+
+                                {item.comments && (
+                                    <>
+                                        <View style={styles.divider} />
+                                        <View style={styles.fieldRow}>
+                                            <View style={styles.fieldContainer}>
+                                                <Text style={[styles.label, { fontSize: responsiveFontSize(10) }]}>COMMENTS</Text>
+                                                <Text style={[styles.value, { fontSize: responsiveFontSize(16) }]}>{item.comments}</Text>
+                                            </View>
+                                        </View>
+                                    </>
+                                )}
+
+                                {item.lastModified && (
+                                    <>
+                                        <View style={styles.divider} />
+                                        <View style={styles.fieldRow}>
+                                            <View style={styles.fieldContainer}>
+                                                <Text style={[styles.label, { fontSize: responsiveFontSize(10) }]}>LAST MODIFIED</Text>
+                                                <Text style={[styles.timestamp, { fontSize: responsiveFontSize(13) }]}>
+                                                    {formatDate(item.lastModified)}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    </>
+                                )}
                             </View>
 
-                            {item.comments && (
-                                <>
-                                    <View style={styles.divider} />
-                                    <View style={styles.fieldRow}>
-                                        <View style={styles.fieldContainer}>
-                                            <Text style={[styles.label, { fontSize: responsiveFontSize(10) }]}>COMMENTS</Text>
-                                            <Text style={[styles.value, { fontSize: responsiveFontSize(16) }]}>{item.comments}</Text>
-                                        </View>
-                                    </View>
-                                </>
-                            )}
-
-                            {item.lastModified && (
-                                <>
-                                    <View style={styles.divider} />
-                                    <View style={styles.fieldRow}>
-                                        <View style={styles.fieldContainer}>
-                                            <Text style={[styles.label, { fontSize: responsiveFontSize(10) }]}>LAST MODIFIED</Text>
-                                            <Text style={[styles.timestamp, { fontSize: responsiveFontSize(13) }]}>
-                                                {formatDate(item.lastModified)}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                </>
-                            )}
-                        </View>
-
-                        <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteButton}>
-                            <Text style={styles.deleteText}>Delete</Text>
-                        </TouchableOpacity>
-                    </>
-                )}
-            </View>
+                            <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteButton}>
+                                <Ionicons name="trash-outline" size={14} color="#ff6b6b" style={{ marginRight: 4 }} />
+                                <Text style={styles.deleteText}>Delete</Text>
+                            </TouchableOpacity>
+                        </>
+                    )}
+                </View>
+            </TouchableOpacity>
         );
     };
 
@@ -646,11 +690,11 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         marginBottom: 12,
         padding: 14,
-        shadowColor: Colors.shadow.card,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.12,
+        shadowRadius: 10,
+        elevation: 4,
         borderWidth: 1,
         borderColor: Colors.border.light,
     },
@@ -670,14 +714,13 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
     },
     unsyncedBadge: {
-        backgroundColor: '#ffe066',
+        backgroundColor: '#fff3bf',
         paddingHorizontal: 8,
-        paddingVertical: 4,
+        paddingVertical: 6,
         borderRadius: 12,
         marginRight: 8,
-    },
-    unsyncedIcon: {
-        fontSize: 14,
+        borderWidth: 1,
+        borderColor: '#ffe066',
     },
     // Tab Switcher Styles
     tabContainer: {
@@ -774,10 +817,14 @@ const styles = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: Colors.primary.solid,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 15,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 3,
+        elevation: 3,
     },
     siteInitial: {
         fontSize: FontSizes.large,
@@ -843,15 +890,14 @@ const styles = StyleSheet.create({
         padding: 10,
         marginLeft: 5,
     },
-    iconText: {
-        fontSize: 18,
-    },
     deleteButton: {
         alignSelf: 'flex-end',
         paddingVertical: 6,
         paddingHorizontal: 12,
         backgroundColor: '#fff5f5',
         borderRadius: 6,
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     deleteText: {
         color: '#ff6b6b',
@@ -890,9 +936,6 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         marginLeft: 10,
     },
-    editIcon: {
-        fontSize: 16,
-    },
     expandButton: {
         marginLeft: 8,
         backgroundColor: '#f1f3f5',
@@ -901,13 +944,6 @@ const styles = StyleSheet.create({
         height: 36,
         justifyContent: 'center',
         alignItems: 'center',
-    },
-    expandIcon: {
-        fontSize: 22,
-        color: '#495057',
-        fontWeight: 'bold',
-        textAlign: 'center',
-        lineHeight: 22,
     },
     dataLossWarningBanner: {
         backgroundColor: Colors.danger.solid,
