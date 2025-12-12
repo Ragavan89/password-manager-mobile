@@ -122,13 +122,9 @@ export default function GradientButton({
                 styles.container,
                 {
                     transform: [{ scale: scaleAnim }],
-                    paddingVertical: config.paddingVertical,
-                    paddingHorizontal: config.paddingHorizontal,
-                    borderRadius: config.borderRadius,
                     opacity: disabled ? 0.5 : 1,
                     width: fullWidth ? '100%' : 'auto',
                 },
-                shadowStyle,
                 style,
             ]}
         >
@@ -146,6 +142,7 @@ export default function GradientButton({
                             paddingHorizontal: config.paddingHorizontal,
                             borderRadius: config.borderRadius,
                         },
+                        shadowStyle,
                     ]}
                 >
                     {loading ? (
@@ -168,6 +165,7 @@ export default function GradientButton({
                             paddingHorizontal: config.paddingHorizontal,
                             borderRadius: config.borderRadius,
                         },
+                        shadowStyle,
                     ]}
                 >
                     <TouchableOpacity
@@ -195,10 +193,12 @@ export default function GradientButton({
 const styles = StyleSheet.create({
     container: {
         alignSelf: 'flex-start',
+        backgroundColor: 'transparent', // Transparent to avoid white box
     },
     gradient: {
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.2)',
+        overflow: 'hidden', // Ensure gradient doesn't bleed
     },
     touchable: {
         alignItems: 'center',

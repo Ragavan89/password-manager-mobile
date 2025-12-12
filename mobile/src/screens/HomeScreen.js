@@ -31,21 +31,48 @@ import { FontSizes, FontWeights } from '../theme/typography';
 import CreditCard from '../components/CreditCard';
 import { LinearGradient } from 'expo-linear-gradient';
 
-// Generate gradient colors based on first letter
+// Generate gradient colors based on first letter (Forest Emerald theme)
 const getGradientFromLetter = (letter) => {
     const gradients = {
-        'A': ['#667eea', '#764ba2'], 'B': ['#f093fb', '#f5576c'], 'C': ['#4facfe', '#00f2fe'],
-        'D': ['#43e97b', '#38f9d7'], 'E': ['#fa709a', '#fee140'], 'F': ['#30cfd0', '#330867'],
-        'G': ['#a8edea', '#fed6e3'], 'H': ['#ff9a9e', '#fecfef'], 'I': ['#ffecd2', '#fcb69f'],
-        'J': ['#ff6e7f', '#bfe9ff'], 'K': ['#e0c3fc', '#8ec5fc'], 'L': ['#f093fb', '#f5576c'],
-        'M': ['#4facfe', '#00f2fe'], 'N': ['#43e97b', '#38f9d7'], 'O': ['#fa709a', '#fee140'],
-        'P': ['#667eea', '#764ba2'], 'Q': ['#a8edea', '#fed6e3'], 'R': ['#ff9a9e', '#fad0c4'],
-        'S': ['#ffecd2', '#fcb69f'], 'T': ['#a1c4fd', '#c2e9fb'], 'U': ['#d299c2', '#fef9d7'],
-        'V': ['#f5f7fa', '#c3cfe2'], 'W': ['#e0c3fc', '#8ec5fc'], 'X': ['#ff6e7f', '#bfe9ff'],
-        'Y': ['#ffecd2', '#fcb69f'], 'Z': ['#a8edea', '#fed6e3']
+        'A': ['#00b894', '#00cec9'], 'B': ['#0ea5e9', '#38bdf8'], 'C': ['#10b981', '#34d399'],
+        'D': ['#059669', '#10b981'], 'E': ['#f59e0b', '#fbbf24'], 'F': ['#14b8a6', '#5eead4'],
+        'G': ['#00b894', '#55efc4'], 'H': ['#0ea5e9', '#7dd3fc'], 'I': ['#22c55e', '#4ade80'],
+        'J': ['#0891b2', '#06b6d4'], 'K': ['#10b981', '#6ee7b7'], 'L': ['#059669', '#34d399'],
+        'M': ['#0ea5e9', '#22d3ee'], 'N': ['#16a34a', '#22c55e'], 'O': ['#f59e0b', '#fde047'],
+        'P': ['#00b894', '#00cec9'], 'Q': ['#14b8a6', '#2dd4bf'], 'R': ['#0ea5e9', '#7dd3fc'],
+        'S': ['#059669', '#14b8a6'], 'T': ['#0891b2', '#67e8f9'], 'U': ['#fbbf24', '#fde047'],
+        'V': ['#22d3ee', '#a5f3fc'], 'W': ['#10b981', '#86efac'], 'X': ['#0284c7', '#38bdf8'],
+        'Y': ['#eab308', '#facc15'], 'Z': ['#2dd4bf', '#5eead4']
     };
 
-    return gradients[letter.toUpperCase()] || ['#6a11cb', '#2575fc'];
+    return gradients[letter.toUpperCase()] || ['#00b894', '#00cec9'];
+};
+
+// Calculate password strength
+const calculatePasswordStrength = (password) => {
+    if (!password) return { strength: 'unknown', color: '#adb5bd', label: 'Unknown', percentage: 0 };
+
+    let score = 0;
+
+    // Length check
+    if (password.length >= 8) score += 20;
+    if (password.length >= 12) score += 10;
+    if (password.length >= 16) score += 10;
+
+    // Character variety
+    if (/[a-z]/.test(password)) score += 15; // lowercase
+    if (/[A-Z]/.test(password)) score += 15; // uppercase
+    if (/[0-9]/.test(password)) score += 15; // numbers
+    if (/[^a-zA-Z0-9]/.test(password)) score += 15; // special chars
+
+    // Determine strength level
+    if (score >= 80) {
+        return { strength: 'strong', color: '#51cf66', label: 'Strong', percentage: 100 };
+    } else if (score >= 50) {
+        return { strength: 'medium', color: '#ffd43b', label: 'Medium', percentage: 66 };
+    } else {
+        return { strength: 'weak', color: '#ff6b6b', label: 'Weak', percentage: 33 };
+    }
 };
 
 export default function HomeScreen({ navigation }) {
@@ -354,6 +381,9 @@ export default function HomeScreen({ navigation }) {
         // Get gradient colors based on first letter
         const gradientColors = getGradientFromLetter(item.siteName.charAt(0));
 
+        // Calculate password strength
+        const passwordStrength = calculatePasswordStrength(displayPassword);
+
         return (
             <TouchableOpacity
                 activeOpacity={0.95}
@@ -423,7 +453,28 @@ export default function HomeScreen({ navigation }) {
 
                                 <View style={styles.fieldRow}>
                                     <View style={styles.fieldContainer}>
-                                        <Text style={[styles.label, { fontSize: responsiveFontSize(10) }]}>PASSWORD</Text>
+                                        <View style={styles.passwordHeaderRow}>
+                                            <Text style={[styles.label, { fontSize: responsiveFontSize(10) }]}>PASSWORD</Text>
+                                            {/* Password Strength Meter */}
+                                            {displayPassword && (
+                                                <View style={styles.strengthMeterContainer}>
+                                                    <View style={styles.strengthMeterBackground}>
+                                                        <View
+                                                            style={[
+                                                                styles.strengthMeterFill,
+                                                                {
+                                                                    width: `${passwordStrength.percentage}%`,
+                                                                    backgroundColor: passwordStrength.color
+                                                                }
+                                                            ]}
+                                                        />
+                                                    </View>
+                                                    <Text style={[styles.strengthMeterLabel, { color: passwordStrength.color }]}>
+                                                        {passwordStrength.label}
+                                                    </Text>
+                                                </View>
+                                            )}
+                                        </View>
                                         <Text style={[styles.password, { fontSize: responsiveFontSize(16) }]}>
                                             {showPassword[item.id] ? (displayPassword || '••••••••••••') : '••••••••••••'}
                                         </Text>
@@ -838,6 +889,34 @@ const styles = StyleSheet.create({
         fontSize: FontSizes.large,
         fontWeight: FontWeights.bold,
         color: Colors.text.primary,
+    },
+    passwordHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    strengthMeterContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    strengthMeterBackground: {
+        width: 60,
+        height: 4,
+        backgroundColor: '#e9ecef',
+        borderRadius: 2,
+        overflow: 'hidden',
+    },
+    strengthMeterFill: {
+        height: '100%',
+        borderRadius: 2,
+    },
+    strengthMeterLabel: {
+        fontSize: 9,
+        fontWeight: FontWeights.bold,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     username: {
         fontSize: FontSizes.small,
