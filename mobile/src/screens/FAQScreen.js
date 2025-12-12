@@ -66,6 +66,10 @@ export default function FAQScreen() {
             answer: "Cloud Sync is an optional feature that allows you to securely backup your encrypted passwords to the cloud. Even when stored in the cloud, your data remains fully encrypted and can only be unlocked by you on your devices."
         },
         {
+            question: "Is there a storage limit?",
+            answer: "For local storage, there is no limit - you can store as many credentials as your device allows. However, Cloud Sync has a storage limit which you can view in the Sync Settings. The current usage and available space are displayed in the Cloud Sync section of your settings."
+        },
+        {
             question: "What if I forget my Master Password?",
             answer: "Because we do not store your Master Password, we cannot recover it for you. If you forget your Master Password, you will unfortunately lose access to your encrypted data. Please keep your Master Password safe!"
         },
@@ -76,6 +80,14 @@ export default function FAQScreen() {
         {
             question: "How do I change my PIN?",
             answer: "If you forget your PIN or want to change it, you can reset it from the Login screen. Tap 'Forgot PIN?' and follow the instructions to verify your identity using your device biometrics (fingerprint/face) or device passcode. Once verified, you can set a new PIN."
+        },
+        {
+            question: "What is Emergency Safety (Panic Mode)?",
+            answer: "Emergency Safety is a security feature that allows you to set up a duress PIN. If you're ever forced to unlock the app under threat, entering this special PIN will show a decoy vault with fake credentials instead of your real data, keeping your actual information safe."
+        },
+        {
+            question: "What happens to my data if I uninstall the app?",
+            answer: "If you only use local storage, uninstalling the app will delete all your data permanently. However, if you have Cloud Sync enabled, your encrypted data is safely backed up in the cloud and can be restored when you reinstall the app and log in with your Master Password."
         },
         {
             question: "How can I contact support?",
