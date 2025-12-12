@@ -601,9 +601,7 @@ export default function SettingsScreen({ navigation }) {
                         <View style={styles.card}>
                             <Text style={styles.cardTitle}>Panic PIN (Decoy Mode)</Text>
                             <Text style={styles.cardDescription}>
-                                Create a separate PIN that opens a fake, empty vault.
-                                {'\n'}{'\n'}
-                                If you are ever forced to unlock your app, use this PIN. It looks real but hides all your passwords.
+                                Create a separate PIN that opens a fake, empty vault. If you are ever forced to unlock your app, use this PIN. It looks real but hides all your passwords.
                             </Text>
 
                             {hasPanicPin ? (
