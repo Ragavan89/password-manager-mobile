@@ -23,19 +23,22 @@ import * as HybridStorageService from '../services/HybridStorageService';
 import { decryptPassword } from '../services/Encryption';
 import * as Clipboard from 'expo-clipboard';
 import { getCurrentUser, onAuthChange } from '../services/FirebaseAuthService';
+
 import * as SecureStore from 'expo-secure-store';
 import { useResponsiveDimensions, useFontSizes } from '../utils/DimensionsHelper';
 import { Colors } from '../theme/colors';
 import { FontSizes, FontWeights } from '../theme/typography';
+import CreditCard from '../components/CreditCard';
 
 export default function HomeScreen({ navigation }) {
     const insets = useSafeAreaInsets();
     // Responsive dimensions hook
-    const { responsiveFontSize, isTablet } = useResponsiveDimensions();
+    const { responsiveFontSize, isTablet, width } = useResponsiveDimensions();
     const fontSizes = useFontSizes();
     const [passwords, setPasswords] = useState([]);
     const [filteredPasswords, setFilteredPasswords] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [activeTab, setActiveTab] = useState('passwords');
     const [showPassword, setShowPassword] = useState({});
     const [expandedCards, setExpandedCards] = useState({});
     const [decryptedPasswords, setDecryptedPasswords] = useState({});
@@ -445,6 +448,10 @@ export default function HomeScreen({ navigation }) {
         );
     };
 
+    // Filter items into categories
+    const passwordItems = filteredPasswords.filter(p => !p.type || p.type === 'password');
+    const cardItems = filteredPasswords.filter(p => p.type === 'card');
+
     return (
         <View style={styles.container}>
             {/* Sync Status Banners */}
@@ -504,39 +511,112 @@ export default function HomeScreen({ navigation }) {
                 </View>
             )}
 
-            <FlatList
-                data={filteredPasswords}
-                keyExtractor={(item) => item.id ? item.id.toString() : Math.random().toString()}
-                renderItem={renderItem}
-                numColumns={isTablet ? 2 : 1}
-                columnWrapperStyle={isTablet ? styles.row : null}
-                contentContainerStyle={[
-                    styles.listContent,
-                    { paddingBottom: 120 + insets.bottom },
-                    isTablet && styles.listContentTablet
-                ]}
-                refreshControl={
-                    <RefreshControl refreshing={false} onRefresh={handleRefresh} />
-                }
-                ListEmptyComponent={
-                    <View style={styles.emptyState}>
-                        {searchQuery.length > 0 ? (
-                            <>
-                                <Text style={[styles.emptyText, { fontSize: responsiveFontSize(18) }]}>No passwords found</Text>
-                                <Text style={[styles.emptySubText, { fontSize: responsiveFontSize(14) }]}>Try a different search term</Text>
-                                <TouchableOpacity onPress={clearSearch} style={styles.clearSearchButton}>
-                                    <Text style={styles.clearSearchButtonText}>Clear Search</Text>
-                                </TouchableOpacity>
-                            </>
-                        ) : (
-                            <>
-                                <Text style={[styles.emptyText, { fontSize: responsiveFontSize(18) }]}>No passwords found.</Text>
-                                <Text style={[styles.emptySubText, { fontSize: responsiveFontSize(14) }]}>Tap "Add New" in the header to add one.</Text>
-                            </>
-                        )}
+            {/* Tab Switcher */}
+            <View style={styles.tabContainer}>
+                <TouchableOpacity
+                    style={[styles.tab, activeTab === 'passwords' && styles.activeTab]}
+                    onPress={() => setActiveTab('passwords')}
+                >
+                    <Text style={[styles.tabText, activeTab === 'passwords' && styles.activeTabText]}>Passwords</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.tab, activeTab === 'wallet' && styles.activeTab]}
+                    onPress={() => setActiveTab('wallet')}
+                >
+                    <Text style={[styles.tabText, activeTab === 'wallet' && styles.activeTabText]}>Wallet</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* Tab Content */}
+            {activeTab === 'passwords' ? (
+                <FlatList
+                    data={passwordItems}
+                    keyExtractor={(item) => item.id ? item.id.toString() : Math.random().toString()}
+                    renderItem={renderItem}
+                    numColumns={isTablet ? 2 : 1}
+                    columnWrapperStyle={isTablet ? styles.row : null}
+                    contentContainerStyle={[
+                        styles.listContent,
+                        { paddingBottom: 120 + insets.bottom },
+                        isTablet && styles.listContentTablet
+                    ]}
+                    refreshControl={
+                        <RefreshControl refreshing={false} onRefresh={handleRefresh} />
+                    }
+                    ListEmptyComponent={
+                        <View style={styles.emptyState}>
+                            {searchQuery.length > 0 ? (
+                                <>
+                                    <Text style={[styles.emptyText, { fontSize: responsiveFontSize(18) }]}>No passwords found</Text>
+                                    <Text style={[styles.emptySubText, { fontSize: responsiveFontSize(14) }]}>Try a different search term</Text>
+                                    <TouchableOpacity onPress={clearSearch} style={styles.clearSearchButton}>
+                                        <Text style={styles.clearSearchButtonText}>Clear Search</Text>
+                                    </TouchableOpacity>
+                                </>
+                            ) : (
+                                <>
+                                    <Text style={[styles.emptyText, { fontSize: responsiveFontSize(18) }]}>No passwords found.</Text>
+                                    <Text style={[styles.emptySubText, { fontSize: responsiveFontSize(14) }]}>Tap "Add New" in the header to add one.</Text>
+                                </>
+                            )}
+                        </View>
+                    }
+                />
+            ) : (
+                /* Wallet Tab Content */
+                <View style={styles.walletTabContainer}>
+                    <View style={styles.walletHeaderContainer}>
+                        <Text style={styles.walletTitle}>My Cards</Text>
+                        <TouchableOpacity style={styles.addCardButton} onPress={() => navigation.navigate('AddCard')}>
+                            <Text style={styles.addCardButtonText}>+ Add Card</Text>
+                        </TouchableOpacity>
                     </View>
-                }
-            />
+
+                    {/* Wallet List */}
+                    {cardItems.length > 0 ? (
+                        <View style={styles.carouselContainer}>
+                            <FlatList
+                                data={cardItems}
+                                keyExtractor={item => item.id}
+                                renderItem={({ item }) => {
+                                    // Safe meta parsing
+                                    let meta = {};
+                                    try {
+                                        meta = item.meta ? JSON.parse(item.meta) : {};
+                                    } catch (e) {
+                                        // Ignore parse error
+                                    }
+
+                                    return (
+                                        <TouchableOpacity
+                                            activeOpacity={0.9}
+                                            onPress={() => navigation.navigate('AddCard', { item: item })}
+                                            style={{ marginBottom: 15 }}
+                                        >
+                                            <CreditCard
+                                                type={meta.cardType || 'generic'}
+                                                bankName={item.siteName}
+                                                holderName={item.username}
+                                                last4={meta.last4 || '••••'}
+                                                color1={meta.color1 || '#343a40'}
+                                                color2={meta.color2 || '#868e96'}
+                                            />
+                                        </TouchableOpacity>
+                                    );
+                                }}
+                                contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 20, paddingTop: 10 }}
+                                showsVerticalScrollIndicator={false}
+                            />
+                        </View>
+                    ) : (
+                        /* Placeholder for empty wallet */
+                        <View style={styles.emptyWalletState}>
+                            <Text style={styles.emptyWalletText}>No cards in your wallet yet.</Text>
+                            <Text style={[styles.emptyWalletText, { fontSize: 12, marginTop: 5 }]}>Tap "+ Add Card" to securely store your payments.</Text>
+                        </View>
+                    )}
+                </View>
+            )}
         </View>
     );
 }
@@ -598,6 +678,93 @@ const styles = StyleSheet.create({
     },
     unsyncedIcon: {
         fontSize: 14,
+    },
+    // Tab Switcher Styles
+    tabContainer: {
+        flexDirection: 'row',
+        marginHorizontal: 20,
+        marginBottom: 15,
+        backgroundColor: '#e9ecef',
+        borderRadius: 12,
+        padding: 4,
+    },
+    tab: {
+        flex: 1,
+        paddingVertical: 10,
+        alignItems: 'center',
+        borderRadius: 10,
+    },
+    activeTab: {
+        backgroundColor: '#fff',
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    tabText: {
+        fontWeight: '600',
+        color: '#868e96',
+        fontSize: 14,
+    },
+    activeTabText: {
+        color: '#343a40',
+        fontWeight: 'bold',
+    },
+    // Wallet Tab Styles
+    walletTabContainer: {
+        flex: 1,
+    },
+    walletHeaderContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        marginBottom: 15,
+    },
+    walletTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#343a40',
+    },
+    addCardButton: {
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        backgroundColor: '#e7f5ff',
+        borderRadius: 20,
+    },
+    addCardButtonText: {
+        color: '#1c7ed6',
+        fontWeight: 'bold',
+        fontSize: 12,
+    },
+    carouselContainer: {
+        marginBottom: 20,
+    },
+    walletContent: {
+        paddingHorizontal: 20,
+        paddingBottom: 20,
+    },
+    emptyWalletState: {
+        alignItems: 'center',
+        marginTop: 20,
+        paddingHorizontal: 40,
+    },
+    emptyWalletText: {
+        color: '#adb5bd',
+        textAlign: 'center',
+        fontSize: 14,
+    },
+    listHeaderContainer: {
+        paddingHorizontal: 20,
+        marginBottom: 10,
+    },
+    listHeaderTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#868e96',
+        textTransform: 'uppercase',
+        letterSpacing: 1,
     },
     cardHeader: {
         flexDirection: 'row',

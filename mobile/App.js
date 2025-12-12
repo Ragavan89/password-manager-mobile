@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import HomeScreen from './src/screens/HomeScreen';
 import AddPasswordScreen from './src/screens/AddPasswordScreen';
+import AddCardScreen from './src/screens/AddCardScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import SetupMasterPasswordScreen from './src/screens/SetupMasterPasswordScreen';
 import SetupPINScreen from './src/screens/SetupPINScreen';
@@ -42,6 +43,11 @@ export default function App() {
               name="AddPassword"
               component={AddPasswordScreen}
               options={{ title: 'Add New Password' }}
+            />
+            <Stack.Screen
+              name="AddCard"
+              component={AddCardScreen}
+              options={{ title: 'Add New Card' }}
             />
             <Stack.Screen
               name="Settings"

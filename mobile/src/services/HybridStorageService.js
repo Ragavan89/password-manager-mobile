@@ -248,11 +248,12 @@ const isCloudSyncEnabled = async () => {
  */
 export const savePassword = async (passwordData) => {
     try {
-        // Extract fields for Database.addPassword
         const siteName = passwordData.siteName || 'Untitled';
         const username = passwordData.username || '';
         const encryptedPassword = passwordData.encryptedPassword || '';
         const comments = passwordData.comments || '';
+        const type = passwordData.type || 'password';
+        const meta = passwordData.meta || '';
 
         // Check network status first
         const netState = await NetInfo.fetch();
@@ -296,7 +297,8 @@ export const savePassword = async (passwordData) => {
         }
 
         // Always save to local database first (with sync status)
-        const { id, lastModified } = Database.addPassword(siteName, username, encryptedPassword, comments, cloudSynced);
+        // Pass 'null' for id unless specifically provided
+        const { id, lastModified } = Database.addPassword(siteName, username, encryptedPassword, comments, cloudSynced, passwordData.id || null, type, meta);
 
         let uploadedToCloud = false;
 
@@ -374,13 +376,15 @@ export const updatePassword = async (id, passwordData) => {
         const username = passwordData.username || '';
         const encryptedPassword = passwordData.encryptedPassword || '';
         const comments = passwordData.comments || '';
+        const type = passwordData.type || 'password';
+        const meta = passwordData.meta || '';
 
         // Check network status first
         const netState = await NetInfo.fetch();
         const isOffline = !netState.isConnected;
 
         // Always update local database first (fast operation)
-        const { lastModified } = Database.updatePassword(id, siteName, username, encryptedPassword, comments);
+        const { lastModified } = Database.updatePassword(id, siteName, username, encryptedPassword, comments, type, meta);
 
         let uploadedToCloud = false;
         let limitReached = false;
@@ -809,27 +813,47 @@ export const syncBidirectional = async () => {
                             lastModified: cloudPwd.lastModified || cloudPwd.lastUpdated || cloudPwd.updatedAt, // Preserve timestamp
                             cloudSynced: 1 // Mark as synced
                         }));
+                        console.log(`📥 Downloading ${toDownload.length} new passwords from cloud...`);
+                        // Use batch insert for performance
+                        const newEntries = toDownload.map(p => ({
+                            id: p.id,
+                            siteName: p.siteName,
+                            username: p.username,
+                            encryptedPassword: p.encryptedPassword,
+                            lastModified: p.lastModified || p.lastUpdated || new Date().toISOString(),
+                            comments: p.comments,
+                            cloudSynced: 1, // It came from cloud, so it is synced
+                            type: p.type || 'password',
+                            meta: p.meta || ''
+                        }));
 
-                        Database.addPasswordsBatch(batchData);
-                        console.log(`✅ Batch downloaded ${toDownload.length} passwords`);
+                        Database.addPasswordsBatch(newEntries);
+                        // Update cache for new entries
+                        // newEntries.forEach(entry => Encryption.cacheDecryptionKey(entry.id, ...)); // Optimization for later
                     } catch (err) {
                         console.error('❌ Error during batch download:', err);
                     }
                 }
 
                 // Update local passwords
-                for (const { cloud, local } of toUpdateLocal) {
-                    try {
-                        Database.updatePassword(
-                            local.id,
-                            cloud.siteName || 'Untitled',
-                            cloud.username || '',
-                            cloud.encryptedPassword || '',
-                            cloud.comments || ''
-                        );
-                    } catch (err) {
-                        console.error(`❌ Error updating local ${cloud.siteName}:`, err);
-                    }
+                if (toUpdateLocal.length > 0) {
+                    console.log(`🔄 Updating ${toUpdateLocal.length} local passwords from cloud...`);
+                    Database.withTransaction(() => {
+                        toUpdateLocal.forEach(({ cloud }) => {
+                            Database.upsertPassword(
+                                cloud.id,
+                                cloud.siteName,
+                                cloud.username,
+                                cloud.encryptedPassword,
+                                cloud.lastModified || cloud.lastUpdated || new Date().toISOString(),
+                                cloud.comments,
+                                cloud.type || 'password',
+                                cloud.meta || ''
+                            );
+                            // Ensure it's marked as synced since we just updated from cloud
+                            Database.updateCloudSyncStatus(cloud.id, 1);
+                        });
+                    });
                 }
 
                 // OPTIMIZATION 3: Execute cloud operations in parallel batches
@@ -857,7 +881,9 @@ export const syncBidirectional = async () => {
                                 encryptedPassword: pwd.encryptedPassword,
                                 comments: pwd.comments,
                                 lastModified: pwd.lastModified,
-                                id: pwd.id // Use UUID
+                                id: pwd.id, // Use UUID
+                                type: pwd.type || 'password', // Include type
+                                meta: pwd.meta || '' // Include meta
                             });
                         })
                     );
@@ -895,7 +921,9 @@ export const syncBidirectional = async () => {
                                 username: local.username,
                                 encryptedPassword: local.encryptedPassword,
                                 comments: local.comments,
-                                lastModified: local.lastModified
+                                lastModified: local.lastModified,
+                                type: local.type || 'password',
+                                meta: local.meta || ''
                             });
                         })
                     );

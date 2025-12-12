@@ -22,6 +22,11 @@ if (Platform.OS !== 'web') {
 
 export const initDatabase = () => {
   if (Platform.OS === 'web') return;
+
+  // RESET DATABASE FOR SCHEMA UPDATE (Since user approved data wipe)
+  // Remove this line after first run if you want to persist data across schema changes later
+  // db.execSync('DROP TABLE IF EXISTS passwords'); 
+
   db.execSync(`
     CREATE TABLE IF NOT EXISTS passwords (
       id TEXT PRIMARY KEY,
@@ -30,40 +35,35 @@ export const initDatabase = () => {
       encryptedPassword TEXT NOT NULL,
       lastModified TEXT,
       comments TEXT,
+      type TEXT DEFAULT 'password',
+      meta TEXT,
+      cloudSynced INTEGER DEFAULT 1,
       isDeleted INTEGER DEFAULT 0,
       deletedAt TEXT
     );
   `);
 
-  // Add new columns to existing table if they don't exist
-  try {
-    db.execSync('ALTER TABLE passwords ADD COLUMN lastModified TEXT');
-  } catch (e) {
-    // Column already exists
-  }
-  try {
-    db.execSync('ALTER TABLE passwords ADD COLUMN comments TEXT');
-  } catch (e) {
-    // Column already exists
-  }
-  try {
-    db.execSync('ALTER TABLE passwords ADD COLUMN cloudSynced INTEGER DEFAULT 1');
-  } catch (e) {
-    // Column already exists
-  }
-  try {
-    db.execSync('ALTER TABLE passwords ADD COLUMN isDeleted INTEGER DEFAULT 0');
-  } catch (e) {
-    // Column already exists
-  }
-  try {
-    db.execSync('ALTER TABLE passwords ADD COLUMN deletedAt TEXT');
-  } catch (e) {
-    // Column already exists
-  }
+  // Add new columns to existing table if they don't exist (Migration)
+  const columnsToAdd = [
+    { name: 'lastModified', type: 'TEXT' },
+    { name: 'comments', type: 'TEXT' },
+    { name: 'cloudSynced', type: 'INTEGER DEFAULT 1' },
+    { name: 'isDeleted', type: 'INTEGER DEFAULT 0' },
+    { name: 'deletedAt', type: 'TEXT' },
+    { name: 'type', type: "TEXT DEFAULT 'password'" },
+    { name: 'meta', type: 'TEXT' }
+  ];
+
+  columnsToAdd.forEach(col => {
+    try {
+      db.execSync(`ALTER TABLE passwords ADD COLUMN ${col.name} ${col.type}`);
+    } catch (e) {
+      // Column likely exists
+    }
+  });
 };
 
-export const addPassword = (siteName, username, encryptedPassword, comments = '', cloudSynced = 1, id = null) => {
+export const addPassword = (siteName, username, encryptedPassword, comments = '', cloudSynced = 1, id = null, type = 'password', meta = '') => {
   const { isPanicMode } = require('./Encryption');
   if (isPanicMode()) {
     console.warn("🚨 PANIC MODE: Write operation blocked.");
@@ -76,20 +76,22 @@ export const addPassword = (siteName, username, encryptedPassword, comments = ''
 
   if (Platform.OS === 'web') {
     const existing = JSON.parse(localStorage.getItem('passwords') || '[]');
-    const newEntry = { id: newId, siteName, username, encryptedPassword, lastModified, comments, cloudSynced };
+    const newEntry = { id: newId, siteName, username, encryptedPassword, lastModified, comments, cloudSynced, type, meta };
     localStorage.setItem('passwords', JSON.stringify([...existing, newEntry]));
     return { id: newId, lastModified };
   }
 
   db.runSync(
-    'INSERT INTO passwords (id, siteName, username, encryptedPassword, lastModified, comments, cloudSynced) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO passwords (id, siteName, username, encryptedPassword, lastModified, comments, cloudSynced, type, meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
     newId,
     siteName,
     username,
     encryptedPassword,
     lastModified,
     comments,
-    cloudSynced
+    cloudSynced,
+    type,
+    meta
   );
   return { id: newId, lastModified };
 };
@@ -108,6 +110,8 @@ export const addPasswordsBatch = (passwords) => {
       lastModified: p.lastModified || defaultLastModified,
       comments: p.comments || '',
       cloudSynced: p.cloudSynced !== undefined ? p.cloudSynced : 1,
+      type: p.type || 'password',
+      meta: p.meta || '',
       isDeleted: 0
     }));
     localStorage.setItem('passwords', JSON.stringify([...existing, ...newEntries]));
@@ -119,14 +123,16 @@ export const addPasswordsBatch = (passwords) => {
     db.withTransactionSync(() => {
       for (const p of passwords) {
         db.runSync(
-          'INSERT OR REPLACE INTO passwords (id, siteName, username, encryptedPassword, lastModified, comments, cloudSynced) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          'INSERT OR REPLACE INTO passwords (id, siteName, username, encryptedPassword, lastModified, comments, cloudSynced, type, meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
           p.id || Crypto.randomUUID(),
           p.siteName,
           p.username,
           p.encryptedPassword,
           p.lastModified || defaultLastModified,
           p.comments || '',
-          p.cloudSynced !== undefined ? p.cloudSynced : 1
+          p.cloudSynced !== undefined ? p.cloudSynced : 1,
+          p.type || 'password',
+          p.meta || ''
         );
       }
     });
@@ -157,37 +163,39 @@ export const getPasswords = () => {
 
 
 
-export const updatePassword = (id, siteName, username, encryptedPassword, comments = '') => {
+export const updatePassword = (id, siteName, username, encryptedPassword, comments = '', type = 'password', meta = '') => {
   const lastModified = new Date().toISOString();
 
   if (Platform.OS === 'web') {
     const existing = JSON.parse(localStorage.getItem('passwords') || '[]');
     const updated = existing.map(p =>
-      p.id === id ? { ...p, id, siteName, username, encryptedPassword, lastModified, comments } : p
+      p.id === id ? { ...p, id, siteName, username, encryptedPassword, lastModified, comments, type, meta } : p
     );
     localStorage.setItem('passwords', JSON.stringify(updated));
     return { lastModified };
   }
   db.runSync(
-    'UPDATE passwords SET siteName = ?, username = ?, encryptedPassword = ?, lastModified = ?, comments = ? WHERE id = ?',
+    'UPDATE passwords SET siteName = ?, username = ?, encryptedPassword = ?, lastModified = ?, comments = ?, type = ?, meta = ? WHERE id = ?',
     siteName,
     username,
     encryptedPassword,
     lastModified,
     comments,
+    type,
+    meta,
     id
   );
   return { lastModified };
 };
 
-export const upsertPassword = (id, siteName, username, encryptedPassword, lastModified, comments = '') => {
+export const upsertPassword = (id, siteName, username, encryptedPassword, lastModified, comments = '', type = 'password', meta = '') => {
   if (Platform.OS === 'web') {
     const existing = JSON.parse(localStorage.getItem('passwords') || '[]');
     const index = existing.findIndex(p => p.id === id);
     if (index >= 0) {
-      existing[index] = { id, siteName, username, encryptedPassword, lastModified, comments };
+      existing[index] = { id, siteName, username, encryptedPassword, lastModified, comments, type, meta };
     } else {
-      existing.push({ id, siteName, username, encryptedPassword, lastModified, comments });
+      existing.push({ id, siteName, username, encryptedPassword, lastModified, comments, type, meta });
     }
     localStorage.setItem('passwords', JSON.stringify(existing));
     return;
@@ -195,24 +203,28 @@ export const upsertPassword = (id, siteName, username, encryptedPassword, lastMo
 
   // For SQLite, try update first, if no rows affected, insert
   const result = db.runSync(
-    'UPDATE passwords SET siteName = ?, username = ?, encryptedPassword = ?, lastModified = ?, comments = ? WHERE id = ?',
+    'UPDATE passwords SET siteName = ?, username = ?, encryptedPassword = ?, lastModified = ?, comments = ?, type = ?, meta = ? WHERE id = ?',
     siteName,
     username,
     encryptedPassword,
     lastModified,
     comments,
+    type,
+    meta,
     id
   );
 
   if (result.changes === 0) {
     db.runSync(
-      'INSERT INTO passwords (id, siteName, username, encryptedPassword, lastModified, comments) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO passwords (id, siteName, username, encryptedPassword, lastModified, comments, type, meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       id,
       siteName,
       username,
       encryptedPassword,
       lastModified,
-      comments
+      comments,
+      type,
+      meta
     );
   }
 };
