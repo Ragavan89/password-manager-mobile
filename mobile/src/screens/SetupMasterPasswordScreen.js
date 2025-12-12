@@ -35,6 +35,8 @@ import * as SecureStore from 'expo-secure-store';
 import { getCurrentUser } from '../services/FirebaseAuthService';
 import NetInfo from '@react-native-community/netinfo';
 import { useResponsiveDimensions } from '../utils/DimensionsHelper';
+import { Colors } from '../theme/colors';
+import { FontWeights } from '../theme/typography';
 
 export default function SetupMasterPasswordScreen({ navigation }) {
     // Responsive dimensions hook
@@ -493,11 +495,11 @@ const styles = StyleSheet.create({
         lineHeight: 18,
     },
     button: {
-        backgroundColor: '#007AFF',
+        backgroundColor: Colors.primary.solid,
         paddingVertical: 18,
         borderRadius: 12,
         alignItems: 'center',
-        shadowColor: '#007AFF',
+        shadowColor: Colors.primary.solid,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
@@ -528,7 +530,7 @@ const styles = StyleSheet.create({
     passwordBox: {
         backgroundColor: '#f8f9fa',
         borderWidth: 2,
-        borderColor: '#007AFF',
+        borderColor: Colors.primary.solid,
         borderRadius: 12,
         padding: 20,
         alignItems: 'center',
@@ -536,7 +538,7 @@ const styles = StyleSheet.create({
     passwordText: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: '#007AFF',
+        color: Colors.primary.solid,
         letterSpacing: 1,
     },
     warningBox: {
@@ -566,7 +568,7 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     backupButton: {
-        backgroundColor: '#007AFF',
+        backgroundColor: Colors.primary.solid,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
@@ -618,11 +620,11 @@ const styles = StyleSheet.create({
         lineHeight: 18,
     },
     continueButton: {
-        backgroundColor: '#28a745',
+        backgroundColor: Colors.success.solid,
         paddingVertical: 18,
         borderRadius: 12,
         alignItems: 'center',
-        shadowColor: '#28a745',
+        shadowColor: Colors.success.solid,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,

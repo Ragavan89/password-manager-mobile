@@ -541,16 +541,9 @@ export default function HomeScreen({ navigation }) {
                     onPress={() => navigation.navigate('Settings')}
                     activeOpacity={0.8}
                 >
-                    <View style={styles.warningContent}>
-                        <Text style={styles.warningIcon}>⚠️</Text>
-                        <View style={styles.warningTextContainer}>
-                            <Text style={styles.warningTitle}>WARNING: Local Storage Only</Text>
-                            <Text style={styles.warningMessage}>
-                                Your passwords are NOT backed up. If you uninstall this app, all passwords will be permanently lost.
-                            </Text>
-                            <Text style={styles.warningAction}>👉 Tap here to enable cloud sync</Text>
-                        </View>
-                    </View>
+                    <Text style={styles.compactWarningText}>
+                        ⚠️ Not backed up to cloud - Tap to save securely
+                    </Text>
                 </TouchableOpacity>
             )}
 
@@ -1026,10 +1019,18 @@ const styles = StyleSheet.create({
     },
     dataLossWarningBanner: {
         backgroundColor: Colors.danger.solid,
-        paddingVertical: 14,
+        paddingVertical: 8,
         paddingHorizontal: 16,
-        borderBottomWidth: 2,
+        borderBottomWidth: 1,
         borderBottomColor: Colors.danger.dark,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    compactWarningText: {
+        fontSize: FontSizes.small,
+        fontWeight: FontWeights.semibold,
+        color: Colors.neutral.white,
+        textAlign: 'center',
     },
     warningContent: {
         flexDirection: 'row',

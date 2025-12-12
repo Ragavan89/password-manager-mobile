@@ -9,7 +9,7 @@
     "jsEngine": "hermes",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.venidigital.credvault",
-      "versionCode": 2,
+      "versionCode": 3,
       "minSdkVersion": 21,
       "targetSdkVersion": 34,
       "compileSdkVersion": 34,
