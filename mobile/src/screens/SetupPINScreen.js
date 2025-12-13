@@ -170,29 +170,27 @@ export default function SetupPINScreen({ navigation }) {
                             />
                         </View>
                     </View>
-                </ScrollView>
-
-                {/* Footer Buttons - Outside ScrollView to stay visible above keyboard */}
-                <View style={styles.footer}>
-                    <TouchableOpacity
-                        style={[styles.button, currentPin.length !== 4 && styles.buttonDisabled]}
-                        onPress={handleContinue}
-                        disabled={currentPin.length !== 4}
-                    >
-                        <Text style={styles.buttonText}>
-                            {step === 1 ? 'Continue' : 'Confirm & Save'}
-                        </Text>
-                    </TouchableOpacity>
-
-                    {step === 2 && (
+                    <View style={[styles.footer, { marginTop: 'auto' }]}>
                         <TouchableOpacity
-                            style={styles.backButton}
-                            onPress={handleBack}
+                            style={[styles.button, currentPin.length !== 4 && styles.buttonDisabled]}
+                            onPress={handleContinue}
+                            disabled={currentPin.length !== 4}
                         >
-                            <Text style={styles.backButtonText}>← Back</Text>
+                            <Text style={styles.buttonText}>
+                                {step === 1 ? 'Continue' : 'Confirm & Save'}
+                            </Text>
                         </TouchableOpacity>
-                    )}
-                </View>
+
+                        {step === 2 && (
+                            <TouchableOpacity
+                                style={styles.backButton}
+                                onPress={handleBack}
+                            >
+                                <Text style={styles.backButtonText}>← Back</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
@@ -324,7 +322,5 @@ const styles = StyleSheet.create({
         padding: 24,
         paddingTop: 12,
         backgroundColor: theme.colors.surface,
-        borderTopWidth: 1,
-        borderTopColor: theme.colors.border,
     },
 });

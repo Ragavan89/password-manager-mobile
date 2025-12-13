@@ -244,7 +244,7 @@ export default function AddCardScreen({ navigation, route }) {
                         buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }],
                         textAlign: 'left'
                     });
-                } else if (result.warning) {
+                } else if (result.limitReached || result.warning) {
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
                     setAlertConfig({
                         visible: true,

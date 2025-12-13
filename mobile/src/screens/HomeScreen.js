@@ -29,6 +29,8 @@ import { useResponsiveDimensions, useFontSizes } from '../utils/DimensionsHelper
 import { Colors } from '../theme/colors';
 import { FontSizes, FontWeights } from '../theme/typography';
 import CreditCard from '../components/CreditCard';
+import CustomAlert from '../components/CustomAlert';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 
 // Generate gradient colors based on first letter (Forest Emerald theme)
@@ -91,6 +93,7 @@ export default function HomeScreen({ navigation }) {
     const [lastSyncTime, setLastSyncTime] = useState(null);
     const [lastLoginTime, setLastLoginTime] = useState(null);
     const [isAuthStateReady, setIsAuthStateReady] = useState(false);
+    const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', type: 'info', buttons: [] });
 
     // Listen to auth state changes to update sync status
     useEffect(() => {
@@ -279,8 +282,27 @@ export default function HomeScreen({ navigation }) {
         await loadPasswords({ silent: false, skipSync: false });
     };
 
-    const handleDelete = async (id) => {
+    const handleDelete = (item) => {
+        setAlertConfig({
+            visible: true,
+            title: 'Delete Password',
+            message: `Are you sure you want to delete "${item.siteName}"?\n\nThis action cannot be undone.`,
+            type: 'warning',
+            buttons: [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    onPress: async () => {
+                        await performDelete(item.id);
+                    }
+                }
+            ]
+        });
+    };
+
+    const performDelete = async (id) => {
         await HybridStorageService.deletePassword(id);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
         // If cloud sync is enabled, trigger a sync to upload any pending entries
         if (cloudSyncEnabled) {
@@ -516,7 +538,7 @@ export default function HomeScreen({ navigation }) {
                                 )}
                             </View>
 
-                            <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteButton}>
+                            <TouchableOpacity onPress={() => handleDelete(item)} style={styles.deleteButton}>
                                 <Ionicons name="trash-outline" size={14} color="#ff6b6b" style={{ marginRight: 4 }} />
                                 <Text style={styles.deleteText}>Delete</Text>
                             </TouchableOpacity>
@@ -705,6 +727,15 @@ export default function HomeScreen({ navigation }) {
                     )}
                 </View>
             )}
+            {/* Custom Alert */}
+            <CustomAlert
+                visible={alertConfig.visible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                buttons={alertConfig.buttons}
+                onClose={() => setAlertConfig({ ...alertConfig, visible: false })}
+            />
         </View>
     );
 }

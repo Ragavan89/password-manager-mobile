@@ -191,7 +191,7 @@ export default function AddPasswordScreen({ navigation, route }) {
                         type: 'info',
                         buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }]
                     });
-                } else if (result.warning) {
+                } else if (result.limitReached || result.warning) {
                     setAlertConfig({
                         visible: true,
                         title: 'Saved Locally Only',

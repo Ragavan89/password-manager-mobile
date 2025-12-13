@@ -23,6 +23,11 @@ import { AppConfig } from '../config/AppConfig';
 import { doc, getDoc, setDoc, getFirestore } from 'firebase/firestore';
 import { app } from '../../firebase.config';
 import NetInfo from '@react-native-community/netinfo';
+
+// Sync timeout configuration - adjust these for different network conditions
+const QUICK_SYNC_TIMEOUT = 1500; // Try quick sync for 1.5 seconds before going to background
+const BACKGROUND_SYNC_TIMEOUT = 10000; // Max 10 seconds for background sync
+
 import {
     getUserSalt,
     syncTemporarySalt,
@@ -255,88 +260,110 @@ export const savePassword = async (passwordData) => {
         const type = passwordData.type || 'password';
         const meta = passwordData.meta || '';
 
-        // Check network status first
-        const netState = await NetInfo.fetch();
-        const isOffline = !netState.isConnected;
-
-        // If cloud sync is enabled, check limit before saving
-        const cloudEnabled = await isCloudSyncEnabled();
-        let cloudUploadSkipped = false;
-        let cloudSynced = 0; // Default: NOT synced (Yellow) - Safer default
-        let isOfflineMode = false;
-
-        if (cloudEnabled && !isOffline) {
-            const user = getCurrentUser();
-
-            try {
-                // Check limit before uploading
-                const cloudLimit = await getCloudPasswordLimit();
-                const cloudResult = await FirestoreService.getPasswords(user.uid);
-                const currentCloudCount = cloudResult.success ? (cloudResult.passwords || []).length : 0;
-
-                if (currentCloudCount >= cloudLimit) {
-                    console.log(`⚠️ Cloud limit reached (${currentCloudCount}/${cloudLimit}). Saving locally only.`);
-                    cloudUploadSkipped = true;
-                    // cloudSynced is already 0
-                }
-            } catch (error) {
-                // If network error occurs while checking, treat as offline
-                if (error.code === 'unavailable' ||
-                    error.message?.includes('network') ||
-                    error.message?.includes('timeout') ||
-                    error.message?.includes('Cannot fetch limit')) {
-                    console.log('⚠️ Network error while checking cloud limit, treating as offline');
-                    isOfflineMode = true;
-                } else {
-                    throw error;
-                }
-            }
-        } else if (cloudEnabled && isOffline) {
-            isOfflineMode = true;
-            console.log('📱 Device is offline, saving locally only');
-        }
-
-        // Always save to local database first (with sync status)
-        // Pass 'null' for id unless specifically provided
+        // Always save to local database FIRST (instant, non-blocking)
+        let cloudSynced = 0; // Mark as unsynced initially
         const { id, lastModified } = Database.addPassword(siteName, username, encryptedPassword, comments, cloudSynced, passwordData.id || null, type, meta);
 
-        let uploadedToCloud = false;
+        console.log(`✅ Password saved locally: ${siteName} (ID: ${id})`);
 
-        // Upload to cloud if enabled, limit not reached, and online
-        if (cloudEnabled && !cloudUploadSkipped && !isOffline && !isOfflineMode) {
-            try {
-                const user = getCurrentUser();
-                const saveResult = await FirestoreService.savePassword(user.uid, {
-                    ...passwordData,
-                    lastModified, // Use the exact timestamp from local DB
-                    id: id // Use UUID
-                });
+        // Smart cloud sync: Try quick upload first, fallback to background
+        const cloudEnabled = await isCloudSyncEnabled();
+        let limitReached = false;
 
-                if (saveResult.success) {
-                    // Mark as synced in local DB
-                    Database.updateCloudSyncStatus(id, 1);
+        if (cloudEnabled) {
+            const user = getCurrentUser();
+            if (user) {
+                // Attempt quick upload (1.5s timeout) - for fast/medium networks
+                try {
+                    // Check limit before uploading
+                    const cloudLimit = await Promise.race([
+                        getCloudPasswordLimit(),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('Limit check timeout')), 1000))
+                    ]);
 
-                    // Update last sync time
-                    await SecureStore.setItemAsync('LAST_SYNC_TIME', new Date().toISOString());
-                    uploadedToCloud = true;
-                }
-            } catch (error) {
-                // If network error occurs during upload, treat as offline
-                if (error.code === 'unavailable' || error.message?.includes('network') || error.message?.includes('timeout')) {
-                    console.log('⚠️ Network error during upload, password saved locally');
-                    isOfflineMode = true;
-                } else {
-                    throw error;
+                    const cloudResult = await Promise.race([
+                        FirestoreService.getPasswords(user.uid),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('Password fetch timeout')), 1000))
+                    ]);
+
+                    const currentCloudCount = cloudResult.success ? (cloudResult.passwords || []).length : 0;
+
+                    if (currentCloudCount >= cloudLimit) {
+                        console.log(`⚠️ Cloud limit reached (${currentCloudCount}/${cloudLimit}). Password saved locally only.`);
+                        limitReached = true;
+                    } else {
+                        // Under limit - attempt quick upload
+                        const quickUploadPromise = FirestoreService.savePassword(user.uid, {
+                            ...passwordData,
+                            lastModified,
+                            id: id
+                        });
+
+                        const saveResult = await Promise.race([
+                            quickUploadPromise,
+                            new Promise((_, reject) =>
+                                setTimeout(() => reject(new Error('Quick upload timeout')), QUICK_SYNC_TIMEOUT)
+                            )
+                        ]);
+
+                        if (saveResult.success) {
+                            // Quick upload succeeded!
+                            Database.updateCloudSyncStatus(id, 1);
+                            await SecureStore.setItemAsync('LAST_SYNC_TIME', new Date().toISOString());
+                            console.log(`✅ Password uploaded to cloud (quick): ${siteName}`);
+                            cloudSynced = 1;
+                        }
+                    }
+                } catch (error) {
+                    // Quick upload failed/timed out - continue with background sync
+                    console.log(`⚠️ Quick upload failed, continuing in background: ${error.message}`);
+
+                    // Start long-running background upload with limit check
+                    (async () => {
+                        try {
+                            // Re-check limit in background (might have changed)
+                            const cloudLimit = await getCloudPasswordLimit();
+                            const cloudResult = await FirestoreService.getPasswords(user.uid);
+                            const currentCloudCount = cloudResult.success ? (cloudResult.passwords || []).length : 0;
+
+                            if (currentCloudCount >= cloudLimit) {
+                                console.log(`⚠️ Cloud limit reached in background (${currentCloudCount}/${cloudLimit}). Staying yellow.`);
+                                return; // Don't upload, entry stays yellow
+                            }
+
+                            const uploadPromise = FirestoreService.savePassword(user.uid, {
+                                ...passwordData,
+                                lastModified,
+                                id: id
+                            });
+
+                            const saveResult = await Promise.race([
+                                uploadPromise,
+                                new Promise((_, reject) =>
+                                    setTimeout(() => reject(new Error('Upload timeout')), BACKGROUND_SYNC_TIMEOUT)
+                                )
+                            ]);
+
+                            if (saveResult.success) {
+                                Database.updateCloudSyncStatus(id, 1);
+                                await SecureStore.setItemAsync('LAST_SYNC_TIME', new Date().toISOString());
+                                console.log(`✅ Password uploaded to cloud (background): ${siteName}`);
+                            }
+                        } catch (bgError) {
+                            console.log(`⚠️ Background upload failed (will retry on next sync): ${bgError.message}`);
+                        }
+                    })();
                 }
             }
         }
 
+        // Return immediately
         return {
             success: true,
             id,
-            warning: cloudUploadSkipped ? 'Cloud limit reached. Password saved locally only.' : null,
-            synced: uploadedToCloud,
-            isOffline: isOfflineMode || isOffline
+            synced: cloudSynced === 1,
+            limitReached: limitReached,
+            isOffline: false
         };
     } catch (error) {
         console.error('Error in savePassword:', error);
@@ -379,100 +406,126 @@ export const updatePassword = async (id, passwordData) => {
         const type = passwordData.type || 'password';
         const meta = passwordData.meta || '';
 
-        // Check network status first
-        const netState = await NetInfo.fetch();
-        const isOffline = !netState.isConnected;
-
-        // Always update local database first (fast operation)
+        // Always update local database FIRST (instant, non-blocking)
         const { lastModified } = Database.updatePassword(id, siteName, username, encryptedPassword, comments, type, meta);
 
-        let uploadedToCloud = false;
+        // Mark as unsynced initially
+        let cloudSynced = 0;
         let limitReached = false;
-        let isOfflineMode = false;
+        Database.updateCloudSyncStatus(id, 0);
 
-        // If cloud sync is enabled, also update in Firestore
+        console.log(`✅ Password updated locally: ${siteName} (ID: ${id})`);
+
+        // Smart cloud sync: Try quick upload first, fallback to background
         const cloudEnabled = await isCloudSyncEnabled();
-        if (cloudEnabled && !isOffline) {
-            try {
-                const user = getCurrentUser();
+        if (cloudEnabled) {
+            const user = getCurrentUser();
+            if (user) {
+                // Attempt quick update (1.5s timeout) - for fast/medium networks
 
-                // Try to update, but if document doesn't exist, create it (upsert behavior)
-                const updateResult = await FirestoreService.updatePassword(user.uid, id, {
-                    ...passwordData,
-                    lastModified // Use the exact timestamp from local DB
-                });
+                try {
+                    const quickUpdatePromise = FirestoreService.updatePassword(user.uid, id, {
+                        ...passwordData,
+                        lastModified
+                    });
 
-                // EDGE CASE: If update failed because document doesn't exist in cloud,
-                // this means it's a local-only password that was never synced.
-                // We must check limit before creating it as a new document.
-                if (!updateResult.success && updateResult.error?.includes('No document to update')) {
-                    try {
-                        // CRITICAL: Check cloud limit before creating new document
-                        // This prevents creating new passwords when limit is reached
+                    const updateResult = await Promise.race([
+                        quickUpdatePromise,
+                        new Promise((_, reject) =>
+                            setTimeout(() => reject(new Error('Quick update timeout')), QUICK_SYNC_TIMEOUT)
+                        )
+                    ]);
+
+                    if (updateResult.success) {
+                        Database.updateCloudSyncStatus(id, 1);
+                        await SecureStore.setItemAsync('LAST_SYNC_TIME', new Date().toISOString());
+                        console.log(`✅ Password updated in cloud (quick): ${siteName}`);
+                        cloudSynced = 1;
+                    } else if (updateResult.error?.includes('No document')) {
+                        // Document doesn't exist in cloud (Local Only). Treat as NEW upload.
+                        console.log(`⚠️ Document missing in cloud. Checking limit before creation...`);
+
+                        // Check limit quickly
                         const cloudLimit = await getCloudPasswordLimit();
                         const cloudResult = await FirestoreService.getPasswords(user.uid);
                         const currentCloudCount = cloudResult.success ? (cloudResult.passwords || []).length : 0;
 
                         if (currentCloudCount >= cloudLimit) {
-                            console.log(`⚠️ Cannot create document - limit reached (${currentCloudCount}/${cloudLimit})`);
-                            console.log(`ℹ️ Password updated locally only. It will remain unsynced until limit is freed.`);
-                            // Don't upload, keep as unsynced
-                            uploadedToCloud = false;
+                            console.log(`⚠️ Cloud limit reached (${currentCloudCount}/${cloudLimit}). Cannot create cloud doc.`);
                             limitReached = true;
                         } else {
-                            console.log(`⚠️ Document doesn't exist in cloud, creating it (${currentCloudCount + 1}/${cloudLimit})`);
+                            // Limit OK - Create document
                             const saveResult = await FirestoreService.savePassword(user.uid, {
-                                id: id,
+                                ...passwordData,
+                                lastModified,
+                                id: id
+                            });
+
+                            if (saveResult.success) {
+                                Database.updateCloudSyncStatus(id, 1);
+                                await SecureStore.setItemAsync('LAST_SYNC_TIME', new Date().toISOString());
+                                console.log(`✅ Password created in cloud (quick): ${siteName}`);
+                                cloudSynced = 1;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.log(`⚠️ Quick update failed, continuing in background: ${error.message}`);
+
+                    // Background update
+                    (async () => {
+                        try {
+                            const updatePromise = FirestoreService.updatePassword(user.uid, id, {
                                 ...passwordData,
                                 lastModified
                             });
-                            if (saveResult.success) {
-                                uploadedToCloud = true;
+
+                            const updateResult = await Promise.race([
+                                updatePromise,
+                                new Promise((_, reject) =>
+                                    setTimeout(() => reject(new Error('Update timeout')), BACKGROUND_SYNC_TIMEOUT)
+                                )
+                            ]);
+
+                            if (updateResult.success) {
+                                Database.updateCloudSyncStatus(id, 1);
+                                await SecureStore.setItemAsync('LAST_SYNC_TIME', new Date().toISOString());
+                                console.log(`✅ Password updated in cloud (background): ${siteName}`);
+                            } else if (updateResult.error?.includes('No document')) {
+                                // Background creation attempt
+                                const cloudLimit = await getCloudPasswordLimit();
+                                const cloudResult = await FirestoreService.getPasswords(user.uid);
+                                const currentCloudCount = cloudResult.success ? (cloudResult.passwords || []).length : 0;
+
+                                if (currentCloudCount < cloudLimit) {
+                                    const saveResult = await FirestoreService.savePassword(user.uid, {
+                                        ...passwordData,
+                                        lastModified,
+                                        id: id
+                                    });
+                                    if (saveResult.success) {
+                                        Database.updateCloudSyncStatus(id, 1);
+                                        console.log(`✅ Password created in cloud (background)`);
+                                    }
+                                } else {
+                                    console.log(`⚠️ Limit reached in background logic`);
+                                }
                             }
+                        } catch (bgError) {
+                            console.log(`⚠️ Background update failed (will retry on next sync): ${bgError.message}`);
                         }
-                    } catch (error) {
-                        // If network error occurs while checking, treat as offline
-                        if (error.code === 'unavailable' ||
-                            error.message?.includes('network') ||
-                            error.message?.includes('timeout') ||
-                            error.message?.includes('Cannot fetch limit')) {
-                            console.log('⚠️ Network error while checking cloud limit, treating as offline');
-                            isOfflineMode = true;
-                        } else {
-                            throw error;
-                        }
-                    }
-                } else if (updateResult.success) {
-                    uploadedToCloud = true;
-                }
-            } catch (error) {
-                // If network error occurs during update, treat as offline
-                if (error.code === 'unavailable' || error.message?.includes('network') || error.message?.includes('timeout')) {
-                    console.log('⚠️ Network error during update, password updated locally');
-                    isOfflineMode = true;
-                } else {
-                    throw error;
+                    })();
                 }
             }
-
-            if (uploadedToCloud) {
-                // Ensure it's marked as synced
-                Database.updateCloudSyncStatus(id, 1);
-
-                // Update last sync time
-                await SecureStore.setItemAsync('LAST_SYNC_TIME', new Date().toISOString());
-            }
-        } else if (cloudEnabled && isOffline) {
-            isOfflineMode = true;
-            console.log('📱 Device is offline, updating locally only');
         }
 
-        if (!uploadedToCloud) {
-            // Mark as unsynced (Yellow) because we changed it locally but not in cloud
-            Database.updateCloudSyncStatus(id, 0);
-        }
-
-        return { success: true, synced: uploadedToCloud, limitReached, isOffline: isOfflineMode || isOffline };
+        // Return immediately
+        return {
+            success: true,
+            synced: cloudSynced === 1,
+            limitReached: limitReached,
+            isOffline: false
+        };
     } catch (error) {
         console.error('Error in updatePassword:', error);
         return { success: false, error: error.message };
@@ -721,18 +774,44 @@ export const syncBidirectional = async () => {
                 }
 
                 // Step 3: Process local passwords (find local-only items) - O(n)
+                const toDeleteLocally = [];
+
                 for (const localPwd of localPasswords) {
                     if (!cloudMap.has(localPwd.id)) {
-                        // Case D: Only in local → Upload to cloud
-                        // CRITICAL FIX: Check if we're already uploading this ID
-                        if (!uploadingIds.has(localPwd.id)) {
-                            toUpload.push(localPwd);
-                            uploadingIds.add(localPwd.id);
+                        // CRITICAL FIX FOR "ZOMBIE RESURRECTION"
+                        // If local password is marked as "Synced" (1) but is missing from Cloud,
+                        // it implies it was deleted on another device.
+                        // We should DELETE it locally instead of re-uploading it.
+                        if (localPwd.cloudSynced === 1) {
+                            console.log(`🗑️ DETECTED REMOTE DELETION: ${localPwd.siteName} (ID: ${localPwd.id}) is synced locally but missing in cloud.`);
+                            toDeleteLocally.push(localPwd.id);
                         } else {
-                            console.warn(`⚠️ Duplicate upload prevented for ${localPwd.siteName} (ID: ${localPwd.id})`);
+                            // Case D: Only in local AND not synced (0) → New Entry → Upload to cloud
+                            // CRITICAL FIX: Check if we're already uploading this ID
+                            if (!uploadingIds.has(localPwd.id)) {
+                                toUpload.push(localPwd);
+                                uploadingIds.add(localPwd.id);
+                            } else {
+                                console.warn(`⚠️ Duplicate upload prevented for ${localPwd.siteName} (ID: ${localPwd.id})`);
+                            }
                         }
                     }
                     // If exists in both, already handled in Step 2
+                }
+
+                // Execute local deletions for "Zombie" prevention
+                if (toDeleteLocally.length > 0) {
+                    console.log(`🧹 Cleaning up ${toDeleteLocally.length} locally resurrected items...`);
+                    for (const id of toDeleteLocally) {
+                        try {
+                            // Use permanent delete because it was already deleted in cloud
+                            // We don't want to create a tombstone and sync it back (circular)
+                            Database.permanentlyDelete(id);
+                            console.log(`✅ Removed local zombie: ${id}`);
+                        } catch (err) {
+                            console.error(`❌ Failed to remove local zombie ${id}:`, err);
+                        }
+                    }
                 }
 
                 console.log(`📤 To upload: ${toUpload.length}`);
@@ -838,21 +917,19 @@ export const syncBidirectional = async () => {
                 // Update local passwords
                 if (toUpdateLocal.length > 0) {
                     console.log(`🔄 Updating ${toUpdateLocal.length} local passwords from cloud...`);
-                    Database.withTransaction(() => {
-                        toUpdateLocal.forEach(({ cloud }) => {
-                            Database.upsertPassword(
-                                cloud.id,
-                                cloud.siteName,
-                                cloud.username,
-                                cloud.encryptedPassword,
-                                cloud.lastModified || cloud.lastUpdated || new Date().toISOString(),
-                                cloud.comments,
-                                cloud.type || 'password',
-                                cloud.meta || ''
-                            );
-                            // Ensure it's marked as synced since we just updated from cloud
-                            Database.updateCloudSyncStatus(cloud.id, 1);
-                        });
+                    toUpdateLocal.forEach(({ cloud }) => {
+                        Database.upsertPassword(
+                            cloud.id,
+                            cloud.siteName,
+                            cloud.username,
+                            cloud.encryptedPassword,
+                            cloud.lastModified || cloud.lastUpdated || new Date().toISOString(),
+                            cloud.comments,
+                            cloud.type || 'password',
+                            cloud.meta || ''
+                        );
+                        // Ensure it's marked as synced since we just updated from cloud
+                        Database.updateCloudSyncStatus(cloud.id, 1);
                     });
                 }
 
@@ -932,6 +1009,9 @@ export const syncBidirectional = async () => {
                         if (result.status === 'fulfilled' && result.value.success) {
                             updatedCloudCount++;
                             console.log(`✅ Updated cloud: ${batch[index].local.siteName} (ID: ${batch[index].cloud.id})`);
+
+                            // Mark as synced in local DB so yellow highlight disappears
+                            Database.updateCloudSyncStatus(batch[index].local.id, 1);
                         } else {
                             errorCount++;
                             const errorMsg = result.status === 'rejected' ? result.reason : result.value.error;
