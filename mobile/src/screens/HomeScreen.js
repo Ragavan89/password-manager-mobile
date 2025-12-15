@@ -382,7 +382,13 @@ export default function HomeScreen({ navigation }) {
     const renderItem = ({ item }) => {
         const displayPassword = decryptedPasswords[item.id];
         const isExpanded = expandedCards[item.id];
-        const isUnsynced = cloudSyncEnabled && item.cloudSynced === 0;
+        // Only show "Local Only" yellow border if it's truly not in cloud (0)
+        // Modified items (2) will rely on the badge indicator
+        const isLocalOnly = cloudSyncEnabled && item.cloudSynced === HybridStorageService.SyncStatus.LOCAL_ONLY;
+        const isModified = cloudSyncEnabled && item.cloudSynced === HybridStorageService.SyncStatus.MODIFIED;
+
+        // "Unsynced" style only for Local Only items to avoid confusion
+        const isUnsyncedStyle = isLocalOnly;
 
         // Get gradient colors based on first letter
         const gradientColors = getGradientFromLetter(item.siteName.charAt(0));
@@ -395,7 +401,7 @@ export default function HomeScreen({ navigation }) {
                 activeOpacity={0.95}
                 onPress={() => toggleExpand(item.id)}
             >
-                <View style={[styles.card, isUnsynced && styles.unsyncedCard, isTablet && styles.cardTablet]}>
+                <View style={[styles.card, isUnsyncedStyle && styles.unsyncedCard, isTablet && styles.cardTablet]}>
                     <View style={[styles.cardHeader, isExpanded && { marginBottom: 15 }]}>
                         {/* Gradient Icon Container */}
                         <LinearGradient
@@ -415,9 +421,15 @@ export default function HomeScreen({ navigation }) {
                             </Text>
                         </View>
 
-                        {isUnsynced && (
+                        {isLocalOnly && (
                             <View style={styles.unsyncedBadge}>
                                 <Ionicons name="cloud-offline-outline" size={14} color="#e67700" />
+                            </View>
+                        )}
+
+                        {isModified && (
+                            <View style={[styles.unsyncedBadge, { backgroundColor: '#e3f2fd', borderColor: '#74c0fc' }]}>
+                                <Ionicons name="cloud-upload-outline" size={14} color="#1c7ed6" />
                             </View>
                         )}
 
@@ -694,7 +706,8 @@ export default function HomeScreen({ navigation }) {
                                         // Ignore parse error
                                     }
 
-                                    const isUnsynced = cloudSyncEnabled && item.cloudSynced === 0;
+                                    const isLocalOnly = cloudSyncEnabled && item.cloudSynced === HybridStorageService.SyncStatus.LOCAL_ONLY;
+                                    const isModified = cloudSyncEnabled && item.cloudSynced === HybridStorageService.SyncStatus.MODIFIED;
 
                                     return (
                                         <TouchableOpacity
@@ -709,7 +722,8 @@ export default function HomeScreen({ navigation }) {
                                                 last4={meta.last4 || '••••'}
                                                 color1={meta.color1 || '#343a40'}
                                                 color2={meta.color2 || '#868e96'}
-                                                isUnsynced={isUnsynced}
+                                                isUnsynced={isLocalOnly}
+                                                isModified={isModified}
                                             />
                                         </TouchableOpacity>
                                     );

@@ -66,6 +66,10 @@ export default function FAQScreen() {
             answer: "Cloud Sync is an optional feature that allows you to securely backup your encrypted passwords to the cloud. Even when stored in the cloud, your data remains fully encrypted and can only be unlocked by you on your devices."
         },
         {
+            question: "What do the colored indicators mean?",
+            answer: "We use visual indicators to help you understand the sync status of your data:\n• Yellow Border: This item is 'Saved Locally Only'. It is stored on this device but has not been backed up to the cloud yet (often due to storage limits).\n• Blue Badge: This item is in the cloud, but has 'Pending Changes'. You have modified it locally, and the updates are waiting to be uploaded to the cloud."
+        },
+        {
             question: "Is there a storage limit?",
             answer: "For local storage, there is no limit - you can store as many credentials as your device allows. However, Cloud Sync has a storage limit which you can view in the Sync Settings. The current usage and available space are displayed in the Cloud Sync section of your settings."
         },

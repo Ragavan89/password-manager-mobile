@@ -202,7 +202,7 @@ export default function AddCardScreen({ navigation, route }) {
                     setAlertConfig({
                         visible: true,
                         title: 'Updated Locally Only',
-                        message: 'Your card has been updated on this device.\n\nHowever, it could not be synced to the cloud because you have reached your storage limit.\n\nTo enable cloud sync, please delete some passwords or cards.',
+                        message: 'Your card has been updated securely on this device.\n\nHowever, it could not be synced to the cloud because you have reached your storage limit.\n\nTo enable cloud sync, please delete some passwords or cards.',
                         type: 'warning',
                         buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }],
                         textAlign: 'left'

@@ -163,6 +163,21 @@ export const getPasswords = () => {
 
 
 
+
+export const getPassword = (id) => {
+  if (Platform.OS === 'web') {
+    const all = JSON.parse(localStorage.getItem('passwords') || '[]');
+    return all.find(p => p.id === id);
+  }
+  try {
+    const result = db.getFirstSync('SELECT * FROM passwords WHERE id = ?', id);
+    return result;
+  } catch (error) {
+    console.error('Error fetching password:', error);
+    return null;
+  }
+};
+
 export const updatePassword = (id, siteName, username, encryptedPassword, comments = '', type = 'password', meta = '') => {
   const lastModified = new Date().toISOString();
 
@@ -236,9 +251,10 @@ export const updateCloudSyncStatus = (id, cloudSynced = 1) => {
       p.id === id ? { ...p, cloudSynced } : p
     );
     localStorage.setItem('passwords', JSON.stringify(updated));
-    return;
+    return 1;
   }
-  db.runSync('UPDATE passwords SET cloudSynced = ? WHERE id = ?', cloudSynced, id);
+  const result = db.runSync('UPDATE passwords SET cloudSynced = ? WHERE id = ?', cloudSynced, id);
+  return result.changes;
 };
 
 export const deletePassword = (id) => {

@@ -14,7 +14,8 @@ export default function CreditCard({
     bankName = 'Bank',
     color1 = '#4c6ef5',
     color2 = '#15aabf',
-    isUnsynced = false  // New prop for sync status
+    isUnsynced = false,  // Local Only (0)
+    isModified = false   // Modified (2)
 }) {
     const { width } = Dimensions.get('window');
     const { isTablet, responsiveFontSize } = useResponsiveDimensions();
@@ -55,7 +56,15 @@ export default function CreditCard({
                 {isUnsynced && (
                     <View style={styles.unsyncedBadge}>
                         <Ionicons name="cloud-offline-outline" size={14} color="#e67700" />
-                        <Text style={styles.unsyncedText}>Not Synced</Text>
+                        <Text style={styles.unsyncedText}>Local Only</Text>
+                    </View>
+                )}
+
+                {/* Modified Badge */}
+                {isModified && (
+                    <View style={[styles.unsyncedBadge, { backgroundColor: '#e3f2fd' }]}>
+                        <Ionicons name="cloud-upload-outline" size={14} color="#1c7ed6" />
+                        <Text style={[styles.unsyncedText, { color: '#1c7ed6' }]}>Unsynced Changes</Text>
                     </View>
                 )}
 

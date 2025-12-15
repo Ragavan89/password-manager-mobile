@@ -146,7 +146,7 @@ export default function AddPasswordScreen({ navigation, route }) {
                     setAlertConfig({
                         visible: true,
                         title: 'Updated Locally Only',
-                        message: 'Your password has been updated on this device.\n\nHowever, it could not be synced to the cloud because you have reached your storage limit.\n\nTo enable cloud sync, please delete some passwords.',
+                        message: 'Your password has been updated securely on this device.\n\nHowever, it could not be synced to the cloud because you have reached your storage limit.\n\nTo enable cloud sync, please delete some passwords.',
                         type: 'warning',
                         buttons: [{ text: 'OK', style: 'default', onPress: () => navigation.goBack() }],
                         textAlign: 'left'
