@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "jsEngine": "hermes",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/icon.png",
       "resizeMode": "contain",
@@ -39,6 +39,7 @@
       "./plugins/with-agp-fix.js",
       "expo-web-browser",
       "expo-font",
+      "./plugins/with-android-signing.js",
       [
         "expo-build-properties",
         {

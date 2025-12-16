@@ -9,6 +9,7 @@
     "web": "expo start --web",
     "build:android": "npx eas-cli build -p android --profile preview",
     "build:prod": "npx eas-cli build -p android --profile production",
+    "build:local": "npx expo prebuild --platform android --clean && copy keystore\\keystore.properties android\\keystore.properties && cd android && gradlew.bat bundleRelease",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"

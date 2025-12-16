@@ -16,11 +16,14 @@ coverage/
 
 # Native
 *.orig.*
-*.jks
 *.p8
 *.p12
 *.key
 *.mobileprovision
+
+# Keystore and signing
+# keystore.properties
+# keystore/
 
 # Metro
 .metro-health-check*
@@ -70,3 +73,4 @@ junit.xml
 # Mobile - Generated Native Folders (CNG)
 mobile/android/
 mobile/ios/
+mobile/.agent
