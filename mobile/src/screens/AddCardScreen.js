@@ -369,12 +369,12 @@ export default function AddCardScreen({ navigation, route }) {
                     <View style={styles.form}>
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>BANK NAME</Text>
-                            <TextInput style={styles.input} value={bankName} onChangeText={setBankName} placeholder="e.g. Chase" />
+                            <TextInput style={styles.input} value={bankName} onChangeText={setBankName} placeholder="e.g. Chase" placeholderTextColor={Colors.text.tertiary} />
                         </View>
 
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>CARDHOLDER NAME</Text>
-                            <TextInput style={styles.input} value={holderName} onChangeText={setHolderName} placeholder="Name on card" />
+                            <TextInput style={styles.input} value={holderName} onChangeText={setHolderName} placeholder="Name on card" placeholderTextColor={Colors.text.tertiary} />
                         </View>
 
                         <View style={styles.inputGroup}>
@@ -385,6 +385,7 @@ export default function AddCardScreen({ navigation, route }) {
                                 onChangeText={handleCardNumberChange}
                                 keyboardType="numeric"
                                 placeholder="0000 0000 0000 0000"
+                                placeholderTextColor={Colors.text.tertiary}
                                 maxLength={19}
                             />
                         </View>
@@ -415,7 +416,7 @@ export default function AddCardScreen({ navigation, route }) {
                         <View style={styles.row}>
                             <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
                                 <Text style={styles.label}>EXPIRY</Text>
-                                <TextInput style={styles.input} value={expiry} onChangeText={handleExpiryChange} placeholder="MM/YY" maxLength={5} keyboardType="numeric" />
+                                <TextInput style={styles.input} value={expiry} onChangeText={handleExpiryChange} placeholder="MM/YY" placeholderTextColor={Colors.text.tertiary} maxLength={5} keyboardType="numeric" />
                             </View>
                             <View style={[styles.inputGroup, { flex: 1 }]}>
                                 <Text style={styles.label}>CVV</Text>
@@ -425,6 +426,7 @@ export default function AddCardScreen({ navigation, route }) {
                                         value={cvv}
                                         onChangeText={setCVV}
                                         placeholder="123"
+                                        placeholderTextColor={Colors.text.tertiary}
                                         maxLength={4}
                                         keyboardType="numeric"
                                         secureTextEntry={!showCVV}
@@ -448,6 +450,7 @@ export default function AddCardScreen({ navigation, route }) {
                                         value={pin}
                                         onChangeText={setPin}
                                         placeholder="****"
+                                        placeholderTextColor={Colors.text.tertiary}
                                         keyboardType="numeric"
                                         secureTextEntry={!showPIN}
                                     />
@@ -461,7 +464,7 @@ export default function AddCardScreen({ navigation, route }) {
                             </View>
                             <View style={[styles.inputGroup, { flex: 1 }]}>
                                 <Text style={styles.label}>ZIP CODE (OPTIONAL)</Text>
-                                <TextInput style={styles.input} value={zip} onChangeText={setZip} placeholder="Zip" keyboardType="numeric" />
+                                <TextInput style={styles.input} value={zip} onChangeText={setZip} placeholder="Zip" placeholderTextColor={Colors.text.tertiary} keyboardType="numeric" />
                             </View>
                         </View>
 
@@ -472,6 +475,7 @@ export default function AddCardScreen({ navigation, route }) {
                                 value={comments}
                                 onChangeText={setComments}
                                 placeholder="E.g. Use for online shopping only"
+                                placeholderTextColor={Colors.text.tertiary}
                                 multiline
                             />
                         </View>
