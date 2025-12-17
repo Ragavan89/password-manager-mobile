@@ -4,12 +4,12 @@
     "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/green/icon_green.png",
     "userInterfaceStyle": "light",
     "jsEngine": "hermes",
     "newArchEnabled": false,
     "splash": {
-      "image": "./assets/icon.png",
+      "image": "./assets/green/icon_green.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -24,14 +24,14 @@
       "compileSdkVersion": 34,
       "supportsTablet": true,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/green/adaptive-icon-green.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
       "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/green/favicon_green.png"
     },
     "plugins": [
       "expo-sqlite",
