@@ -100,6 +100,13 @@ export default function LoginScreen({ navigation }) {
 
             try {
                 // Save last login timestamp
+                // First, get the current "last login" which is about to become the "previous login"
+                const currentLastLogin = await SecureStore.getItemAsync('LAST_LOGIN_TIMESTAMP');
+                if (currentLastLogin) {
+                    await SecureStore.setItemAsync('PREVIOUS_LOGIN_TIMESTAMP', currentLastLogin);
+                }
+
+                // Now update last login to now
                 await SecureStore.setItemAsync('LAST_LOGIN_TIMESTAMP', new Date().toISOString());
             } catch (error) {
                 console.error('Error saving last login time:', error);
@@ -307,7 +314,7 @@ export default function LoginScreen({ navigation }) {
                             ref={pinInputRef}
                             style={styles.hiddenInput}
                             value={pin}
-                            onChangeText={setPin}
+                            onChangeText={(text) => setPin(text.replace(/[^0-9]/g, ''))}
                             keyboardType="numeric"
                             maxLength={4}
                             onSubmitEditing={handleLogin}
@@ -372,7 +379,7 @@ export default function LoginScreen({ navigation }) {
                                     placeholder="Enter 4 digits"
                                     placeholderTextColor="#adb5bd"
                                     value={newPin}
-                                    onChangeText={setNewPin}
+                                    onChangeText={(text) => setNewPin(text.replace(/[^0-9]/g, ''))}
                                     secureTextEntry
                                     keyboardType="numeric"
                                     maxLength={4}
@@ -385,7 +392,7 @@ export default function LoginScreen({ navigation }) {
                                     placeholder="Re-enter 4 digits"
                                     placeholderTextColor="#adb5bd"
                                     value={confirmPin}
-                                    onChangeText={setConfirmPin}
+                                    onChangeText={(text) => setConfirmPin(text.replace(/[^0-9]/g, ''))}
                                     secureTextEntry
                                     keyboardType="numeric"
                                     maxLength={4}

@@ -136,7 +136,7 @@ export default function HomeScreen({ navigation }) {
 
     const loadLastLoginTime = async () => {
         try {
-            const timestamp = await SecureStore.getItemAsync('LAST_LOGIN_TIMESTAMP');
+            const timestamp = await SecureStore.getItemAsync('PREVIOUS_LOGIN_TIMESTAMP');
             setLastLoginTime(timestamp);
         } catch (error) {
             console.error('Error loading last login time:', error);
