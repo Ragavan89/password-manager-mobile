@@ -527,7 +527,7 @@ const styles = StyleSheet.create({
     form: { marginBottom: 20 },
     inputGroup: { marginBottom: 15 },
     label: { fontSize: 10, fontWeight: 'bold', color: Colors.text.secondary, marginBottom: 5, letterSpacing: 1 },
-    input: { backgroundColor: Colors.neutral.gray100, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#eee' },
+    input: { backgroundColor: Colors.neutral.gray100, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#eee', color: Colors.text.primary },
     row: { flexDirection: 'row' },
     rowInput: { flexDirection: 'row', alignItems: 'center', position: 'relative' },
     eyeIcon: { position: 'absolute', right: 10, padding: 5 },
