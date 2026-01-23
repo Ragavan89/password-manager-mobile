@@ -190,12 +190,11 @@ export const checkLockoutStatus = async () => {
             const remainingSeconds = Math.ceil((lockoutEnd - now) / 1000);
             return { isLocked: true, remainingSeconds };
         } else {
-            // Lockout expired, clear it but KEEP attempts to punish immediate subsequent failure?
-            // Strategy: Clear timestamp, but don't reset attempts until successful login? 
-            // Better Strategy: Users often make typos. If they wait 5 mins, let them try again fresh-ish.
-            // But to prevent rapid 5 min cycles, we won't reset attempts here. 
-            // Just clear the blocking timestamp.
+            // Lockout expired - give user a fresh start
+            // Reset both the timestamp AND the attempts counter
+            // This is fair: user served their lockout time, they deserve another chance
             await SecureStore.deleteItemAsync(LOCKOUT_TIMESTAMP_KEY);
+            await SecureStore.deleteItemAsync(LOCKOUT_ATTEMPTS_KEY);
             return { isLocked: false, remainingSeconds: 0 };
         }
     } catch (error) {

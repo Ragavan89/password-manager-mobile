@@ -3,8 +3,8 @@
  * Premium button with gradient background, animations, and haptic feedback
  */
 
-import React, { useRef } from 'react';
-import { TouchableOpacity, Text, StyleSheet, Animated, ActivityIndicator } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { TouchableOpacity, Text, StyleSheet, Animated, ActivityIndicator, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Colors, Gradients, Shadows } from '../theme/colors';
@@ -19,17 +19,55 @@ export default function GradientButton({
     disabled = false,
     fullWidth = false,
     icon = null,
+    iconPosition = 'left', // left, right
     style = {},
     textStyle = {},
+    glowEffect = false, // Enable glow when button is active
 }) {
     const scaleAnim = useRef(new Animated.Value(1)).current;
+    const glowAnim = useRef(new Animated.Value(0)).current;
+    const opacityAnim = useRef(new Animated.Value(disabled ? 0.5 : 1)).current;
+
+    // Animate opacity when disabled state changes
+    useEffect(() => {
+        Animated.timing(opacityAnim, {
+            toValue: disabled ? 0.5 : 1,
+            duration: 200,
+            useNativeDriver: true,
+        }).start();
+    }, [disabled]);
+
+    // Subtle glow pulse animation when enabled and glowEffect is true
+    useEffect(() => {
+        if (!disabled && glowEffect) {
+            const pulseAnimation = Animated.loop(
+                Animated.sequence([
+                    Animated.timing(glowAnim, {
+                        toValue: 1,
+                        duration: 1500,
+                        useNativeDriver: false,
+                    }),
+                    Animated.timing(glowAnim, {
+                        toValue: 0,
+                        duration: 1500,
+                        useNativeDriver: false,
+                    }),
+                ])
+            );
+            pulseAnimation.start();
+            return () => pulseAnimation.stop();
+        } else {
+            glowAnim.setValue(0);
+        }
+    }, [disabled, glowEffect]);
 
     const handlePressIn = () => {
         if (!disabled && !loading) {
             Animated.spring(scaleAnim, {
-                toValue: 0.95,
+                toValue: 0.96,
                 useNativeDriver: true,
                 speed: 50,
+                bounciness: 4,
             }).start();
         }
     };
@@ -39,11 +77,13 @@ export default function GradientButton({
             toValue: 1,
             useNativeDriver: true,
             speed: 50,
+            bounciness: 8,
         }).start();
     };
 
     const handlePress = () => {
         if (!disabled && !loading) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             onPress?.();
         }
     };
@@ -108,13 +148,16 @@ export default function GradientButton({
         }
     };
 
-    const shadowStyle = {
-        shadowColor: getShadowColor(),
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: disabled ? 0.1 : 0.4,
-        shadowRadius: 16,
-        elevation: disabled ? 2 : 8,
-    };
+    // Interpolate glow for shadow
+    const glowShadowRadius = glowAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [16, 24],
+    });
+
+    const glowShadowOpacity = glowAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0.4, 0.6],
+    });
 
     const buttonContent = (
         <Animated.View
@@ -122,7 +165,7 @@ export default function GradientButton({
                 styles.container,
                 {
                     transform: [{ scale: scaleAnim }],
-                    opacity: disabled ? 0.5 : 1,
+                    opacity: opacityAnim,
                     width: fullWidth ? '100%' : 'auto',
                 },
                 style,
@@ -148,41 +191,71 @@ export default function GradientButton({
                     {loading ? (
                         <ActivityIndicator color={Colors.primary.start} />
                     ) : (
-                        <Text style={[styles.secondaryText, { fontSize: config.fontSize }, textStyle]}>
-                            {children}
-                        </Text>
+                        <View style={styles.contentRow}>
+                            {icon && iconPosition === 'left' && (
+                                <View style={styles.iconLeft}>{icon}</View>
+                            )}
+                            <Text style={[styles.secondaryText, { fontSize: config.fontSize }, textStyle]}>
+                                {children}
+                            </Text>
+                            {icon && iconPosition === 'right' && (
+                                <View style={styles.iconRight}>{icon}</View>
+                            )}
+                        </View>
                     )}
                 </TouchableOpacity>
             ) : gradient ? (
-                <LinearGradient
-                    colors={gradient.colors}
-                    start={gradient.start}
-                    end={gradient.end}
+                <Animated.View
                     style={[
-                        styles.gradient,
                         {
-                            paddingVertical: config.paddingVertical,
-                            paddingHorizontal: config.paddingHorizontal,
                             borderRadius: config.borderRadius,
+                            shadowColor: getShadowColor(),
+                            shadowOffset: { width: 0, height: 8 },
+                            shadowOpacity: glowEffect && !disabled ? glowShadowOpacity : (disabled ? 0.1 : 0.4),
+                            shadowRadius: glowEffect && !disabled ? glowShadowRadius : 16,
+                            elevation: disabled ? 2 : 8,
                         },
-                        shadowStyle,
                     ]}
                 >
-                    <TouchableOpacity
-                        activeOpacity={1}
-                        onPressIn={handlePressIn}
-                        onPressOut={handlePressOut}
-                        onPress={handlePress}
-                        disabled={disabled || loading}
-                        style={styles.touchable}
+                    <LinearGradient
+                        colors={gradient.colors}
+                        start={gradient.start}
+                        end={gradient.end}
+                        style={[
+                            styles.gradient,
+                            {
+                                paddingVertical: config.paddingVertical,
+                                paddingHorizontal: config.paddingHorizontal,
+                                borderRadius: config.borderRadius,
+                            },
+                        ]}
                     >
-                        {loading ? (
-                            <ActivityIndicator color="#fff" />
-                        ) : (
-                            <Text style={[styles.text, { fontSize: config.fontSize }, textStyle]}>{children}</Text>
-                        )}
-                    </TouchableOpacity>
-                </LinearGradient>
+                        <TouchableOpacity
+                            activeOpacity={1}
+                            onPressIn={handlePressIn}
+                            onPressOut={handlePressOut}
+                            onPress={handlePress}
+                            disabled={disabled || loading}
+                            style={styles.touchable}
+                        >
+                            {loading ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <View style={styles.contentRow}>
+                                    {icon && iconPosition === 'left' && (
+                                        <View style={styles.iconLeft}>{icon}</View>
+                                    )}
+                                    <Text style={[styles.text, { fontSize: config.fontSize }, textStyle]}>
+                                        {children}
+                                    </Text>
+                                    {icon && iconPosition === 'right' && (
+                                        <View style={styles.iconRight}>{icon}</View>
+                                    )}
+                                </View>
+                            )}
+                        </TouchableOpacity>
+                    </LinearGradient>
+                </Animated.View>
             ) : null}
         </Animated.View>
     );
@@ -203,6 +276,17 @@ const styles = StyleSheet.create({
     touchable: {
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    contentRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    iconLeft: {
+        marginRight: 10,
+    },
+    iconRight: {
+        marginLeft: 10,
     },
     text: {
         color: Colors.neutral.white,

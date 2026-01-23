@@ -226,6 +226,9 @@ export default function LoginScreen({ navigation }) {
             const result = await setupPIN(newPin);
 
             if (result.success) {
+                // Reset failed attempts counter so user starts fresh
+                await resetFailedAttempts();
+
                 Alert.alert(
                     'Success! ✅',
                     'Your PIN has been reset successfully. You can now use your new PIN to unlock the vault.',
@@ -328,6 +331,10 @@ export default function LoginScreen({ navigation }) {
                         onPress={handleLogin}
                         size="large"
                         fullWidth
+                        disabled={pin.length !== 4}
+                        icon={<Ionicons name="lock-open" size={22} color="#fff" />}
+                        iconPosition="left"
+                        glowEffect={pin.length === 4}
                     >
                         Unlock Vault
                     </GradientButton>
