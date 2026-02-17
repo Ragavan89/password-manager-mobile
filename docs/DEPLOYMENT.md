@@ -99,7 +99,18 @@ npm start
 
 ## 📦 Build Procedures
 
-### 1. Development/Internal Build (APK)
+### 1. Local Testing (QR Code)
+Run the app on your mobile device for quick testing without building an APK.
+
+```bash
+cd mobile
+npm start
+```
+*   Scan the QR code from the terminal using the **Expo Go** app on your phone.
+*   Ensure your phone and PC are on the **same Wi-Fi network**.
+*   Changes are reflected instantly via hot-reloading.
+
+### 2. Development/Internal Build (APK)
 Generates a standalone `.apk` file for manual testing on Android devices. This build is universal and works on most architectures.
 
 ```bash
@@ -108,7 +119,7 @@ npm run build:android
 *   **Artifact**: Universal APK (~70MB).
 *   **Use Case**: Manual distribution to testers via direct download or USB.
 
-### 2. Production Build (AAB)
+### 3. Production Build (AAB) for Production Deployment
 Generates an optimized Android App Bundle (`.aab`) required for Google Play Store submission.
 
 ```bash
@@ -117,17 +128,14 @@ npm run build:prod
 *   **Artifact**: Android App Bundle (~20MB).
 *   **Use Case**: Upload to Google Play Console for release.
 
-### 3. Local Native Build
+### 4. Local Native Build for Production Deployment
 For building binaries directly on your machine without using EAS Cloud services (requires configured Android SDK):
 
+**Release AAB (for Play Store):**
 ```bash
-# Prebuild config
-npx expo prebuild
-
-# Build Debug APK locally
-cd android && ./gradlew assembleDebug
+npm run build:local
 ```
-*   **Output**: `android/app/build/outputs/apk/debug/app-debug.apk`
+*   **Output**: `android/app/build/outputs/bundle/release/app-release.aab`
 
 ---
 

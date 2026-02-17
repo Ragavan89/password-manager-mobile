@@ -13,7 +13,7 @@
  * Uses: HybridStorageService (sync), FirebaseAuthService (auth), Encryption (PIN verify)
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Text, Alert, ScrollView, TouchableOpacity, Modal, ActivityIndicator, TextInput, Platform, KeyboardAvoidingView, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
@@ -56,6 +56,10 @@ export default function SettingsScreen({ navigation }) {
     const [panicSetupStep, setPanicSetupStep] = useState('initial'); // initial, confirm
     const [tempPanicPin, setTempPanicPin] = useState('');
     const [panicPinInput, setPanicPinInput] = useState('');
+
+    // Refs for PIN inputs (used instead of autoFocus to prevent flickering on Android)
+    const pinVerifyInputRef = useRef(null);
+    const panicPinInputRef = useRef(null);
 
     // Custom Alert state
     const [alertConfig, setAlertConfig] = useState({
@@ -340,10 +344,12 @@ export default function SettingsScreen({ navigation }) {
                 } else {
                     Alert.alert('Error', result.error || 'Failed to retrieve master password');
                     setPin('');
+                    setTimeout(() => pinVerifyInputRef.current?.focus(), 100);
                 }
             } else {
                 Alert.alert('Error', 'Incorrect PIN');
                 setPin('');
+                setTimeout(() => pinVerifyInputRef.current?.focus(), 100);
             }
         } catch (error) {
             Alert.alert('Error', 'An unexpected error occurred');
@@ -385,6 +391,8 @@ export default function SettingsScreen({ navigation }) {
             setTempPanicPin(panicPinInput);
             setPanicPinInput('');
             setPanicSetupStep('confirm');
+            // Re-focus input after transitioning to confirm step
+            setTimeout(() => panicPinInputRef.current?.focus(), 100);
         } else {
             // Confirm step
             if (panicPinInput !== tempPanicPin) {
@@ -392,6 +400,8 @@ export default function SettingsScreen({ navigation }) {
                 setPanicSetupStep('initial');
                 setTempPanicPin('');
                 setPanicPinInput('');
+                // Re-focus input after reset
+                setTimeout(() => panicPinInputRef.current?.focus(), 100);
                 return;
             }
 
@@ -406,6 +416,8 @@ export default function SettingsScreen({ navigation }) {
                 setPanicSetupStep('initial');
                 setTempPanicPin('');
                 setPanicPinInput('');
+                // Re-focus input after error reset
+                setTimeout(() => panicPinInputRef.current?.focus(), 100);
             }
         }
     };
@@ -684,9 +696,13 @@ export default function SettingsScreen({ navigation }) {
                     transparent={true}
                     animationType="fade"
                     onRequestClose={handleClosePinModal}
+                    onShow={() => {
+                        // Delay focus to allow modal layout to settle before keyboard opens
+                        setTimeout(() => pinVerifyInputRef.current?.focus(), 300);
+                    }}
                 >
                     <KeyboardAvoidingView
-                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                         style={styles.modalOverlay}
                     >
                         <View style={styles.modalContent}>
@@ -699,6 +715,7 @@ export default function SettingsScreen({ navigation }) {
                             </Text>
 
                             <TextInput
+                                ref={pinVerifyInputRef}
                                 style={styles.pinInput}
                                 placeholder="Enter 4-digit PIN"
                                 placeholderTextColor="#999"
@@ -707,7 +724,6 @@ export default function SettingsScreen({ navigation }) {
                                 keyboardType="number-pad"
                                 maxLength={4}
                                 secureTextEntry
-                                autoFocus
                             />
 
                             <View style={styles.modalButtons}>
@@ -738,9 +754,13 @@ export default function SettingsScreen({ navigation }) {
                     transparent={true}
                     animationType="fade"
                     onRequestClose={() => setShowPanicSetupModal(false)}
+                    onShow={() => {
+                        // Delay focus to allow modal layout to settle before keyboard opens
+                        setTimeout(() => panicPinInputRef.current?.focus(), 300);
+                    }}
                 >
                     <KeyboardAvoidingView
-                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                         style={styles.modalOverlay}
                     >
                         <View style={styles.modalContent}>
@@ -757,6 +777,7 @@ export default function SettingsScreen({ navigation }) {
                             </Text>
 
                             <TextInput
+                                ref={panicPinInputRef}
                                 style={styles.pinInput}
                                 placeholder="0000"
                                 placeholderTextColor="#999"
@@ -765,7 +786,6 @@ export default function SettingsScreen({ navigation }) {
                                 keyboardType="number-pad"
                                 maxLength={4}
                                 secureTextEntry
-                                autoFocus
                             />
 
                             <View style={styles.modalButtons}>
